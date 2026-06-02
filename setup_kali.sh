@@ -146,6 +146,7 @@ echo "╔═══════════════════════�
 echo "║              安装完成！                          ║"
 echo "╠══════════════════════════════════════════════════╣"
 echo "║  1. 编辑 .env 填入 API Key                       ║"
+echo "║     启动venv   source venv/bin/activate         ║"
 echo "║  2. 验证环境:                                    ║"
 echo "║     python3 scripts/validate_environment.py      ║"
 echo "║  3. 对靶场测试:                                  ║"
