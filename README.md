@@ -50,6 +50,8 @@ bash setup_kali.sh
 | 5 | 创建 `data/sessions` `data/reports` `data/knowledge_base` 等目录 |
 | 6 | 检测 Docker(可选,用于内置靶场) |
 
+## 如果python虚拟环境安装包太慢请换源，使用清华源就可以
+
 ### 填入 API Key
 
 脚本生成 `.env` 后,编辑它并填入**任意一个**模型的 Key:
