@@ -19,6 +19,9 @@ pyyaml>=6.0.1
 rich>=13.7.0
 click>=8.1.7
 
+# Report Server (scripts/report_server.py serves generated reports over HTTP)
+flask>=3.0.0
+
 # Testing
 pytest>=8.2.0
 pytest-asyncio>=0.23.0
