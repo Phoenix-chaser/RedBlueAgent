@@ -1,0 +1,70 @@
+version: "3.8"
+
+# =============================================================================
+# 靶场环境 - 仅用于启动测试目标
+# Agent 直接在 Kali 宿主机运行，无需容器
+#
+# 启动: docker compose up -d target
+# 靶场: http://localhost:8080  (容器内 IP: 172.20.0.10)
+# =============================================================================
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # 内置靶场 (Built-in Vulnerable Target)
+  # 包含: SQLi / XSS / 命令注入 / 路径遍历 / 弱密码 / IDOR
+  # ---------------------------------------------------------------------------
+  target:
+    build:
+      context: ./targets
+      dockerfile: Dockerfile.target
+    ports:
+      - "8080:5000"
+    networks:
+      pentest_net:
+        ipv4_address: 172.20.0.10
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # ---------------------------------------------------------------------------
+  # DVWA (可选)
+  # 启动: docker compose --profile dvwa up -d
+  # 访问: http://localhost:8081
+  # ---------------------------------------------------------------------------
+  dvwa:
+    image: vulnerables/web-dvwa:latest
+    ports:
+      - "8081:80"
+    networks:
+      pentest_net:
+        ipv4_address: 172.20.0.11
+    restart: unless-stopped
+    profiles:
+      - dvwa
+
+  # ---------------------------------------------------------------------------
+  # Mutillidae (可选)
+  # 启动: docker compose --profile extra up -d
+  # ---------------------------------------------------------------------------
+  mutillidae:
+    image: webpwnized/mutillidae:latest
+    ports:
+      - "8082:80"
+    networks:
+      pentest_net:
+        ipv4_address: 172.20.0.12
+    restart: unless-stopped
+    profiles:
+      - extra
+
+networks:
+  pentest_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24

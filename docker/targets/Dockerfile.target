@@ -1,0 +1,22 @@
+FROM docker.m.daocloud.io/library/python:3.11-slim
+
+RUN apt-get update && apt-get install -y \
+    curl \
+    iputils-ping \
+    libxml2-dev \
+    libxslt-dev \
+    gcc \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY requirements.target.txt .
+RUN pip install --no-cache-dir -r requirements.target.txt
+
+COPY app.py .
+
+RUN python -c "import app; app.init_db()"
+
+EXPOSE 5000
+
+CMD ["python", "app.py"]

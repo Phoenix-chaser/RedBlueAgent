@@ -1,0 +1,21 @@
+# --- Secrets ---
+.env
+*.key
+
+# --- Python ---
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# --- Runtime + knowledge-base data (large; regenerate on Kali) ---
+# Source texts live here too; on Kali, obtain the exploitdb corpus separately
+# and rebuild the vector store with scripts/setup_knowledge_base.py
+data/
+
+# --- Large / non-code artifacts ---
+*.zip
+*.mp3
+*.mp4
+*.pdf

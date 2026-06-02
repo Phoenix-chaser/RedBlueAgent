@@ -1,0 +1,60 @@
+llm:
+  # provider: anthropic | deepseek | moonshot | zhipu | openai
+  # Leave blank to auto-detect from environment variables
+  provider: ""
+  model: ""                   # Leave blank to use provider default
+  max_tokens: 8192
+  temperature: 0.1
+  context_window_budget: 180000
+  summarization_threshold: 130000
+  keep_recent_turns: 20
+
+  # Per-provider context window recommendations:
+  # anthropic  claude-sonnet-4-6    : 200000 tokens
+  # deepseek   deepseek-chat        : 65536 tokens  → set budget to 55000
+  # moonshot   moonshot-v1-128k     : 131072 tokens → set budget to 110000
+  # zhipu      glm-4                : 128000 tokens → set budget to 100000
+
+agent:
+  max_iterations: 200
+  max_stage_iterations: 30
+  react_output_format: xml  # xml or json
+
+tools:
+  nmap:
+    timeout: 300
+    default_flags: "-sV -sC"
+  dirsearch:
+    timeout: 180
+    wordlist: /usr/share/wordlists/dirb/common.txt
+  nikto:
+    timeout: 300
+  sqlmap:
+    timeout: 300
+    level: 2
+    risk: 1
+  metasploit:
+    timeout: 120
+    msfconsole_path: msfconsole
+
+security:
+  require_approval_for_exploits: true
+  auto_approve_scan_only: true
+  dangerous_patterns:
+    - tool: metasploit
+      pattern: "exploit/"
+    - tool: sqlmap
+      pattern: "--os-shell"
+    - tool: nmap
+      pattern: "--script.*exploit"
+
+rag:
+  knowledge_base_dir: data/knowledge_base
+  vector_store_dir: data/knowledge_base/vector_store
+  embedding_model: all-MiniLM-L6-v2
+  top_k_results: 5
+
+storage:
+  sessions_dir: data/sessions
+  reports_dir: data/reports
+  audit_log: data/audit.log
