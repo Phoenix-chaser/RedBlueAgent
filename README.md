@@ -1,5 +1,7 @@
 # RedBlueAgent —— 红蓝一体的 LLM 安全测试平台
 
+**中文** | [English](README_EN.md)
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)]()
 [![Tests](https://img.shields.io/badge/tests-66%20passed-brightgreen.svg)]()
