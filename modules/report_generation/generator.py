@@ -153,7 +153,7 @@ RECOMMENDATIONS_ZH:
 2. <recommendation 2 in Chinese>
 """
         try:
-            from langchain_core.messages import HumanMessage
+            from agent.llm_kernel import HumanMessage
             response = self.llm.invoke([HumanMessage(content=prompt)])
             content = response.content if hasattr(response, "content") else str(response)
             return self._parse_bilingual_narrative(content)

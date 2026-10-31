@@ -71,7 +71,7 @@ class HierarchicalSummarizer:
         )
 
         try:
-            from langchain_core.messages import HumanMessage
+            from agent.llm_kernel import HumanMessage
             response = self.llm.invoke([HumanMessage(content=prompt)])
             return response.content
         except Exception:

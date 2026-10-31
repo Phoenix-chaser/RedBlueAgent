@@ -49,7 +49,7 @@ def main():
         all_ok &= check("At least one API key", False, "set at least one provider key in .env")
 
     # Python packages
-    packages = ["anthropic", "langchain", "langchain_anthropic", "pydantic", "click", "rich", "yaml", "dotenv"]
+    packages = ["pydantic", "click", "rich", "yaml", "dotenv"]  # LLM 层为零依赖内核，无需 langchain
     print("\nPython Packages:")
     for pkg in packages:
         try:

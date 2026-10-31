@@ -135,40 +135,18 @@ def create_llm(
 
 
 def _create_anthropic(model, api_key, max_tokens, temperature, **kwargs):
-    try:
-        from langchain_anthropic import ChatAnthropic
-        return ChatAnthropic(
-            model=model,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            api_key=api_key,
-            **kwargs,
-        )
-    except ImportError:
-        raise ImportError("Run: pip install langchain-anthropic")
+    from agent.llm_kernel import MinimalLLMClient
+    return MinimalLLMClient(
+        provider="anthropic", model=model, api_key=api_key,
+        max_tokens=max_tokens, temperature=temperature)
 
 
 def _create_openai_compat(model, api_key, base_url, max_tokens, temperature, **kwargs):
-    """
-    Creates a ChatOpenAI instance pointing at an OpenAI-compatible endpoint.
-    All domestic Chinese model providers support this interface.
-    """
-    try:
-        from langchain_openai import ChatOpenAI
-    except ImportError:
-        raise ImportError("Run: pip install langchain-openai")
-
-    init_kwargs = dict(
-        model=model,
-        api_key=api_key,
-        max_tokens=max_tokens,
-        temperature=temperature,
-        **kwargs,
-    )
-    if base_url:
-        init_kwargs["base_url"] = base_url
-
-    return ChatOpenAI(**init_kwargs)
+    """统一走极简内核的 OpenAI 兼容协议（DeepSeek / Kimi / GLM / OpenAI 通用）。"""
+    from agent.llm_kernel import MinimalLLMClient
+    return MinimalLLMClient(
+        provider="openai", model=model, api_key=api_key, base_url=base_url,
+        max_tokens=max_tokens, temperature=temperature)
 
 
 def _detect_provider() -> str:
