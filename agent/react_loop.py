@@ -36,6 +36,7 @@ class ReActLoop:
         stage_manager: StageManager,
         security: SecurityBoundaryController,
         rag_kb=None,
+        context_guard=None,
         max_iterations: int = 200,
         max_stage_iterations: int = 30,
     ):
@@ -46,9 +47,14 @@ class ReActLoop:
         self.stage_manager = stage_manager
         self.security = security
         self.rag_kb = rag_kb
+        # 蓝队上下文守卫（RedBlueAgent 融合层）：Act→Observe 之间隔离工具输出中的
+        # 提示注入载荷，防止目标内容劫持 LLM（间接注入）。None = 守卫禁用。
+        self.context_guard = context_guard
         self.max_iterations = max_iterations
         self.max_stage_iterations = max_stage_iterations
         self._stage_iteration_counts: dict[str, int] = {}
+        # 重复动作检测：相同 (tool, params) 直接拦截，不重复执行
+        self._action_hashes: set[int] = set()
         # Caches to avoid recomputing unchanged context on every iteration
         self._rag_cache: tuple[frozenset, str] = (frozenset(), "")  # (service_keys, context)
 
@@ -112,7 +118,18 @@ class ReActLoop:
             if action.type == "tool" and action.tool:
                 console.print(f"[bold]Tool:[/bold] {action.tool} | Params: {action.params}")
 
-                if not self.security.validate(action, state):
+                action_hash = hash((action.tool, json.dumps(action.params, sort_keys=True, ensure_ascii=False)))
+                if action_hash in self._action_hashes:
+                    observation = ToolResult(
+                        tool=action.tool or "unknown",
+                        command="",
+                        success=False,
+                        error_message=(
+                            "REPEATED_ACTION_BLOCKED: 该命令已执行过，禁止重复。"
+                            "请基于已有结果推进分析，或换用不同参数/工具。"),
+                    )
+                    console.print("[yellow]Repeated action blocked[/yellow]")
+                elif not self.security.validate(action, state):
                     observation = ToolResult(
                         tool=action.tool or "unknown",
                         command="",
@@ -121,7 +138,11 @@ class ReActLoop:
                     )
                     console.print(f"[red]Action BLOCKED by security[/red]")
                 else:
+                    self._action_hashes.add(action_hash)
                     observation = self.invoker.invoke(action)
+                    # 蓝队守卫：工具输出进 LLM 上下文前的隔离检查点
+                    if self.context_guard is not None and isinstance(observation, ToolResult):
+                        observation = self.context_guard.guard_observation(observation)
                     if observation.success:
                         console.print(f"[green]✓ Tool completed in {observation.elapsed_seconds:.1f}s[/green]")
                     else:
@@ -146,7 +167,7 @@ class ReActLoop:
     # -----------------------------------------------------------------------
 
     def _build_messages(self, state: PentestState) -> list:
-        from langchain_core.messages import SystemMessage, HumanMessage
+        from agent.llm_kernel import SystemMessage, HumanMessage
 
         # System message
         system_content = SYSTEM_PROMPT

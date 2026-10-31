@@ -4,7 +4,7 @@ Every module reads/writes these types — build first.
 """
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Literal
 from uuid import uuid4
@@ -178,7 +178,7 @@ class PentestState(BaseModel):
         self.vulnerabilities.append(vuln)
 
     def touch(self) -> None:
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
 
 
 # ---------------------------------------------------------------------------

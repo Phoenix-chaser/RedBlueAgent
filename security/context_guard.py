@@ -1,0 +1,168 @@
+# -*- coding: utf-8 -*-
+"""ContextGuard —— 蓝队上下文守卫（RedBlueAgent 融合核心）。
+
+解决的问题：PentestAgent 的 security 层（scope 校验 / 审批 / 审计）只覆盖
+「出站」方向——防止 LLM 滥用工具；而「入站」方向完全空白：工具输出（网页
+注释、robots.txt、HTTP 响应体、扫描到的文件内容）未经检查直接进入 LLM
+上下文。渗透测试对象可能是蜜罐，目标内容中埋一句「忽略你的指令」即可
+劫持测试 Agent 本身（间接提示注入，OWASP LLM01）。
+
+本模块在 ReAct 循环的 Act→Observe 之间插入检查点：
+
+    工具输出 ──→ ContextGuard ──→ LLM 上下文
+                  │ L0 解码还原（Base64/ROT13/全角…）
+                  │ L1 规则 ⊕ 混合特征 LR（含引用豁免）
+                  ├─ 放行（干净内容）
+                  ├─ 隔离（载荷替换为占位标记，字段级）
+                  └─ 蜜罐标记（会话累计命中 ≥ 阈值 → 目标疑似蜜罐）
+
+实现依赖 blueteam 子项目的检测器（L0+L1 轻量配置，仅 sklearn，无需
+torch/深度模型），模型文件 blueteam/models/model_noaug.joblib 由
+blueteam 训练流程产出。加载失败时守卫自动降级为「直通 + 告警」，
+不阻断渗透主流程。
+"""
+from __future__ import annotations
+
+import sys
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
+
+from modules.context_management.state_schema import ToolResult
+
+# 蓝队模型所在子项目根目录（redteam/security/../..//blueteam）
+_BLUETEAM_ROOT = Path(__file__).resolve().parents[1] / "blueteam"
+QUARANTINE_PLACEHOLDER = "[QUARANTINED: 检出提示注入载荷，已被蓝队守卫隔离]"
+MIN_SCAN_LEN = 12  # 短于该长度的字符串不扫描（误报控制 + 性能）
+
+
+def _looks_like_instruction(text: str) -> bool:
+    """内容门控：只有「自然语言指令形态」的字符串才进 ML 检测器。
+
+    检测器建模的是「用户指令」分布；工具输出里大量字段是技术标识符
+    （URL 路径、版本号、产品名），不属于该分布，直接送检会造成误报
+    （演习实测：/.git/config 得分 0.83、Linux Ubuntu 得分 0.68）。
+    门控规则（可解释、可审计）：
+      - 含 CJK 且长度达标 → 扫（中文指令载荷）
+      - 含空格分词且单词数 ≥ 4 → 扫（英文句式载荷）
+      - 其余（路径、版本串、短技术短语）→ 不扫
+    """
+    if len(text) < MIN_SCAN_LEN:
+        return False
+    has_cjk = any("\u4e00" <= c <= "\u9fff" for c in text)
+    if has_cjk:
+        return True
+    word_count = len(text.split())
+    return word_count >= 4
+
+
+@dataclass
+class GuardStats:
+    """会话级守卫统计。"""
+    scanned_strings: int = 0
+    quarantined: int = 0
+    hits: list[dict[str, Any]] = field(default_factory=list)
+    false_quarantine_suspect: list[dict[str, Any]] = field(default_factory=list)
+
+    @property
+    def hit_count(self) -> int:
+        return len(self.hits)
+
+
+class ContextGuard:
+    def __init__(self, detector, threshold: float,
+                 audit_logger=None, honeypot_threshold: int = 2):
+        """detector: 具备 predict_proba(texts)->list[[p_benign,p_attack]] 的对象。"""
+        self.detector = detector
+        self.threshold = threshold
+        self.audit = audit_logger
+        self.honeypot_threshold = honeypot_threshold
+        self.stats = GuardStats()
+        self.honeypot_suspected = False
+
+    # ────────────────────────── 工厂 ──────────────────────────
+    @classmethod
+    def create(cls, audit_logger=None, blueteam_root: Path | None = None,
+               honeypot_threshold: int = 2) -> "ContextGuard | None":
+        """加载 blueteam 检测器（L0+L1 轻量配置）。失败返回 None（守卫禁用）。"""
+        root = Path(blueteam_root) if blueteam_root else _BLUETEAM_ROOT
+        # 用对抗增强版混合模型：守卫部署域是「攻击者主动规避 + 工具输出」，
+        # 增强训练的同义改写鲁棒性在该域实测优于无增强版（演习定位过其漏检），
+        # 且训练数据含工具输出良性类，领域误报已被适配。
+        model_path = root / "models" / "model.joblib"
+        try:
+            import joblib
+
+            if str(root) not in sys.path:
+                sys.path.insert(0, str(root))
+            from src.detectors import Defense, RuleDetector          # noqa: E402
+            from src.deobfuscate import DeobfuscatedScan             # noqa: E402
+
+            bundle = joblib.load(model_path)
+            thr = float(bundle["thresholds"]["hybrid"])  # 模型自带安全工作点阈值
+            defense = Defense(RuleDetector(), bundle["detectors"]["hybrid"], thr)
+            scan = DeobfuscatedScan(defense)
+            return cls(scan, thr, audit_logger=audit_logger,
+                       honeypot_threshold=honeypot_threshold)
+        except Exception as e:  # 模型缺失/依赖不全 → 直通降级
+            print(f"[ContextGuard] 蓝队检测器不可用，守卫降级为直通：{e}")
+            return None
+
+    # ────────────────────────── 扫描 ──────────────────────────
+    def _is_attack(self, text: str) -> tuple[bool, float]:
+        score = self.detector.predict_proba([text])[0][1]
+        return score >= self.threshold, score
+
+    def _sanitize_value(self, value: Any, path: str, tool: str) -> Any:
+        """递归清洗 parsed 结构中的字符串字段。"""
+        if isinstance(value, str):
+            if not _looks_like_instruction(value):
+                return value
+            self.stats.scanned_strings += 1
+            is_attack, score = self._is_attack(value)
+            if is_attack:
+                self.stats.quarantined += 1
+                self.stats.hits.append(
+                    dict(tool=tool, field=path, score=round(score, 3),
+                         preview=value[:60]))
+                if self.audit is not None:
+                    self.audit.log_guard_event(
+                        dict(event="QUARANTINE", tool=tool, field=path,
+                             score=round(score, 3), preview=value[:60]))
+                return QUARANTINE_PLACEHOLDER
+            return value
+        if isinstance(value, dict):
+            return {k: self._sanitize_value(v, f"{path}.{k}", tool)
+                    for k, v in value.items()}
+        if isinstance(value, list):
+            return [self._sanitize_value(v, f"{path}[{i}]", tool)
+                    for i, v in enumerate(value)]
+        return value
+
+    def guard_observation(self, observation: ToolResult) -> ToolResult:
+        """对工具输出做隔离清洗，返回新的 ToolResult。"""
+        if observation is None or not isinstance(observation, ToolResult):
+            return observation
+        observation.parsed = self._sanitize_value(
+            observation.parsed, "parsed", observation.tool)
+        # 原始 stdout 较长时只保留头部供 LLM 参考（同样过守卫）
+        if observation.raw_stdout:
+            head = observation.raw_stdout[:400]
+            is_attack, score = (True, 1.0) if _looks_like_instruction(head) and (
+                self._is_attack(head)[0]) else (False, 0.0)
+            if is_attack:
+                observation.raw_stdout = QUARANTINE_PLACEHOLDER
+                self.stats.quarantined += 1
+                self.stats.hits.append(
+                    dict(tool=observation.tool, field="raw_stdout",
+                         score=round(score, 3), preview=head[:60]))
+        # 蜜罐判定
+        if self.stats.hit_count >= self.honeypot_threshold and not self.honeypot_suspected:
+            self.honeypot_suspected = True
+            if self.audit is not None:
+                self.audit.log_guard_event(
+                    dict(event="HONEYPOT_SUSPECTED",
+                         hits=self.stats.hit_count,
+                         note="目标内容多次携带提示注入载荷，疑似蜜罐/反制措施"))
+            print("[ContextGuard] ⚠ 目标内容多次携带提示注入载荷，疑似蜜罐，已写入审计日志")
+        return observation

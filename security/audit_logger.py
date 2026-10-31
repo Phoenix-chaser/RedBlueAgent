@@ -45,6 +45,10 @@ class AuditLogger:
             "params": getattr(action, "params", {}),
         })
 
+    def log_guard_event(self, data: dict[str, Any]) -> None:
+        """蓝队守卫事件：隔离 / 蜜罐标记（RedBlueAgent 融合层）。"""
+        self._write("GUARD_EVENT", data)
+
     def log_stage_transition(self, from_stage: str, to_stage: str) -> None:
         self._write("STAGE_TRANSITION", {
             "from": from_stage,

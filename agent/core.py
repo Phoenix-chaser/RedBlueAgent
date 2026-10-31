@@ -104,6 +104,14 @@ class PentestAgent:
 
         # Agent loop
         agent_cfg = self.config.get("agent", {})
+        # 蓝队上下文守卫（可选）：加载 blueteam 检测器，隔离工具输出中的提示注入
+        from security.context_guard import ContextGuard
+        guard_cfg = self.config.get("context_guard", {})
+        self.context_guard = None
+        if guard_cfg.get("enabled", True):
+            self.context_guard = ContextGuard.create(
+                audit_logger=audit_logger,
+                honeypot_threshold=guard_cfg.get("honeypot_threshold", 2))
         self.react_loop = ReActLoop(
             llm=self.llm,
             invoker=self.invoker,
@@ -112,6 +120,7 @@ class PentestAgent:
             stage_manager=self.stage_manager,
             security=self.security,
             rag_kb=self.rag_kb,
+            context_guard=self.context_guard,
             max_iterations=agent_cfg.get("max_iterations", 200),
             max_stage_iterations=agent_cfg.get("max_stage_iterations", 30),
         )
