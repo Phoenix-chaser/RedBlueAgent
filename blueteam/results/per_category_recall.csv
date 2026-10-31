@@ -1,0 +1,45 @@
+﻿检测器,类别,语言,n,召回率
+混合特征 LR,data_exfiltration,cn,20,1.0
+混合特征 LR,data_exfiltration,en,20,1.0
+混合特征 LR,indirect_injection,cn,20,1.0
+混合特征 LR,indirect_injection,en,20,0.6
+混合特征 LR,instruction_override,cn,40,0.675
+混合特征 LR,instruction_override,en,40,1.0
+混合特征 LR,prompt_leak,cn,20,0.75
+混合特征 LR,prompt_leak,en,19,1.0
+混合特征 LR,role_escape,cn,20,1.0
+混合特征 LR,role_escape,en,20,0.0
+混合特征 LR,tool_abuse,cn,20,1.0
+字符 TextCNN,data_exfiltration,cn,20,1.0
+字符 TextCNN,data_exfiltration,en,20,1.0
+字符 TextCNN,indirect_injection,cn,20,1.0
+字符 TextCNN,indirect_injection,en,20,0.25
+字符 TextCNN,instruction_override,cn,40,0.25
+字符 TextCNN,instruction_override,en,40,0.65
+字符 TextCNN,prompt_leak,cn,20,0.0
+字符 TextCNN,prompt_leak,en,19,0.0
+字符 TextCNN,role_escape,cn,20,1.0
+字符 TextCNN,role_escape,en,20,0.2
+字符 TextCNN,tool_abuse,cn,20,1.0
+堆叠元学习器,data_exfiltration,cn,20,1.0
+堆叠元学习器,data_exfiltration,en,20,1.0
+堆叠元学习器,indirect_injection,cn,20,1.0
+堆叠元学习器,indirect_injection,en,20,0.3
+堆叠元学习器,instruction_override,cn,40,0.675
+堆叠元学习器,instruction_override,en,40,0.9
+堆叠元学习器,prompt_leak,cn,20,0.0
+堆叠元学习器,prompt_leak,en,19,1.0
+堆叠元学习器,role_escape,cn,20,1.0
+堆叠元学习器,role_escape,en,20,0.95
+堆叠元学习器,tool_abuse,cn,20,1.0
+级联（L1+L2）,data_exfiltration,cn,20,1.0
+级联（L1+L2）,data_exfiltration,en,20,1.0
+级联（L1+L2）,indirect_injection,cn,20,1.0
+级联（L1+L2）,indirect_injection,en,20,1.0
+级联（L1+L2）,instruction_override,cn,40,1.0
+级联（L1+L2）,instruction_override,en,40,1.0
+级联（L1+L2）,prompt_leak,cn,20,0.55
+级联（L1+L2）,prompt_leak,en,19,1.0
+级联（L1+L2）,role_escape,cn,20,1.0
+级联（L1+L2）,role_escape,en,20,1.0
+级联（L1+L2）,tool_abuse,cn,20,1.0
