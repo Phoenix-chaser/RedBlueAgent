@@ -1,23 +1,5 @@
-# LLM 层：零依赖极简内核（agent/llm_kernel.py，标准库实现 OpenAI 兼容 + Anthropic 协议）
-# 无需 langchain —— 依赖更少、接口可控、与 pi（earendil-works）的极简内核哲学一致
-
-# 数据校验 / 配置 / CLI
-pydantic>=2.7.0
-python-dotenv>=1.0.0
-pyyaml>=6.0.1
-rich>=13.7.0
-click>=8.1.7
-
-# 工具输出解析
-lxml>=5.2.0
-
-# 报告服务器（可选）
-flask>=3.0.0
-
-# 测试
-pytest>=8.2.0
-pytest-mock>=3.14.0
-
-# ── 可选：RAG 知识库（不用可删）──
-# chromadb>=0.5.0
-# sentence-transformers>=3.0.0
+# 依赖真身在 pyproject.toml（单一来源）；本文件是薄壳，
+# 兼容 setup_kali.sh 的 `pip install -r requirements.txt`。
+#   -e .[dev]            # 核心 + 测试/lint
+# 可选 extra：report-server（flask）、rag（chromadb + sentence-transformers）
+-e .[dev]

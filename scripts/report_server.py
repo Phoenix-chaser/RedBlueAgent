@@ -831,7 +831,7 @@ def session_detail(session_id: str):
     {t("全部","All")} ({len(sorted_vulns)})
   </button>
   {"".join(
-    f'<button class="filter-btn" data-filter="{sv}" onclick="filterVulns(\'{sv}\',this)" '
+    f'<button class="filter-btn" data-filter="{sv}" onclick="filterVulns(&#39;{sv}&#39;,this)" '
     f'style="color:{SEV_COLORS[sv]};border-color:{SEV_COLORS[sv]}">'
     f'{t(SEV_ZH[sv], SEV_EN[sv])} ({sc[sv]})</button>'
     for sv in ["critical","high","medium","low","info"] if sc[sv] > 0
@@ -869,6 +869,14 @@ def session_detail(session_id: str):
         exp_tag = f'<span class="tag tag-red" style="margin-left:5px">{t("已利用","Exploited")}</span>' if exp else ""
         cve_tag = f'<span class="tag tag-blue" style="margin-left:4px">{cve}</span>' if cve else ""
         search_text = f"{title} {comp} {desc} {cve}".lower()
+        # Python 3.10 兼容：含反斜杠转义的表达式不能放在 f-string 替换字段内
+        # （PEP 701 前语法限制），提前在普通字符串里拼好
+        evid_html = (
+            "<div class='detail-label'>" + t('证据', 'Evidence') + "</div><pre>"
+            + he(evid)
+            + "<button class='btn-copy btn-sm' onclick=\"event.stopPropagation();copyText("
+            + repr(evid) + ",this)\" style='float:right;margin-top:-2px'>⎘</button></pre>"
+        ) if evid else ""
 
         vuln_rows += f"""
 <tr class="vuln-data-row" id="row-{i}" data-sev="{sev}" data-detail-id="{detail_id}"
@@ -889,7 +897,7 @@ def session_detail(session_id: str):
     <div class="vuln-detail">
       <div class="detail-label">{t("描述","Description")}</div>
       <div style="line-height:1.6">{desc}</div>
-      {"<div class='detail-label'>" + t('证据','Evidence') + "</div><pre>" + he(evid) + "<button class='btn-copy btn-sm' onclick=\"event.stopPropagation();copyText(" + repr(evid) + ",this)\" style='float:right;margin-top:-2px'>⎘</button></pre>" if evid else ""}
+      {evid_html}
       {"<div class='detail-label'>" + t('修复建议','Remediation') + "</div><div style='line-height:1.6;margin-top:4px'>" + rem + "</div>" if rem else ""}
     </div>
   </td>

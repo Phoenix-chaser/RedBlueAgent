@@ -7,6 +7,7 @@ Usage:
     python scripts/run_agent.py --target 192.168.1.100 --provider deepseek
     python scripts/run_agent.py --target 192.168.1.100 --provider moonshot --model moonshot-v1-128k
     python scripts/run_agent.py --target 192.168.1.100 --provider zhipu --model glm-4-flash
+    python scripts/run_agent.py --session-id <sid>        # resume an interrupted session
     python scripts/run_agent.py --list-providers
 """
 import sys
@@ -56,7 +57,12 @@ console = Console()
     default=False,
     help="Disable interactive approval prompts (auto-deny dangerous operations)",
 )
-@click.option("--session-id", default=None, help="Custom session ID")
+@click.option(
+    "--session-id",
+    default=None,
+    help="Custom session ID. If this session already exists on disk, it is RESUMED "
+    "(events replayed, snapshot restored) instead of starting a new one.",
+)
 @click.option(
     "--list-providers",
     is_flag=True,
@@ -82,9 +88,10 @@ def main(
         console.print(_list())
         return 0
 
-    if not target:
-        console.print("[red]ERROR: --target is required.[/red]")
+    if not target and not session_id:
+        console.print("[red]ERROR: --target is required (or pass --session-id to resume an existing session).[/red]")
         console.print("Usage: python scripts/run_agent.py --target <IP>")
+        console.print("       python scripts/run_agent.py --session-id <sid>   # resume")
         return 1
 
     # Inject provider/model into env so factory picks them up
@@ -93,12 +100,15 @@ def main(
     if model:
         os.environ["LLM_MODEL"] = model
 
-    scope_list = list(scope) if scope else [target]
+    scope_list = list(scope) if scope else ([target] if target else [])
     interactive = not no_interactive
 
-    console.print(f"[bold]Starting penetration test[/bold]")
-    console.print(f"  Target   : [cyan]{target}[/cyan]")
-    console.print(f"  Scope    : [cyan]{', '.join(scope_list)}[/cyan]")
+    resuming = bool(session_id and not target)
+    console.print(f"[bold]{'Resuming' if resuming else 'Starting'} penetration test[/bold]")
+    if resuming:
+        console.print(f"  Session  : [cyan]{session_id}[/cyan]")
+    console.print(f"  Target   : [cyan]{target or '(from session state)'}[/cyan]")
+    console.print(f"  Scope    : [cyan]{', '.join(scope_list) or '(from session state)'}[/cyan]")
     console.print(f"  Provider : [yellow]{provider or 'auto-detect'}[/yellow]")
     console.print(f"  Model    : [yellow]{model or 'provider default'}[/yellow]")
     console.print(f"  Config   : [dim]{config}[/dim]")
@@ -115,7 +125,8 @@ def main(
     try:
         from agent.core import PentestAgent
         agent = PentestAgent(config_path=config, interactive=interactive)
-        report = agent.run(target=target, scope=scope_list, session_id=session_id)
+        report = agent.run(
+            target=target, scope=scope_list or None, session_id=session_id)
         console.print(f"\n[bold green]Report generated successfully.[/bold green]")
         console.print(f"Session ID: {report.session_id}")
         return 0

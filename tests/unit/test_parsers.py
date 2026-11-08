@@ -2,7 +2,6 @@
 import pytest
 import sys
 import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from modules.tool_invocation.parsers.nmap_parser import NmapParser
 from modules.tool_invocation.parsers.dirsearch_parser import DirsearchParser

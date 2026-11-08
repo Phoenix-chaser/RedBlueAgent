@@ -22,6 +22,9 @@ Actions:
 2. Note every HTTP port (80, 443, 5000, 8080, etc.) for web scanning
 3. Check for SSH, FTP, database ports
 4. Document all findings before proceeding
+Recon discipline: for equal information gain choose the lightest probe;
+never rescan what you already know (exact repeats are blocked); keep noise
+minimal on production targets.
 """,
 
     PentestStage.VULNERABILITY_SCANNING.value: """
@@ -33,6 +36,8 @@ Actions:
 3. For each path found, note the HTTP status code
 4. Check for common sensitive paths: /.env, /admin, /backup, /config, /robots.txt
 5. Do NOT skip dirsearch — it discovers most of the attack surface
+Tip: independent scans (nikto + dirsearch on the same port) can be issued
+together as a single "parallel" action to save wall-clock time.
 """,
 
     PentestStage.VULNERABILITY_ANALYSIS.value: """

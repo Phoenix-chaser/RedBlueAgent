@@ -13,7 +13,6 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from agent.react_loop import ReActLoop
 from agent.llm_kernel import AIMessage

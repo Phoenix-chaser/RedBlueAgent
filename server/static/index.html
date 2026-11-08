@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>PentestAgent Console</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 0; background: #0f1117; color: #d7dce5; }
+  header { padding: 14px 20px; background: #161a23; border-bottom: 1px solid #2a2f3d; }
+  header h1 { font-size: 18px; margin: 0; }
+  main { display: grid; grid-template-columns: 260px 1fr 300px; gap: 12px; padding: 14px; height: calc(100vh - 64px); box-sizing: border-box; }
+  section { background: #161a23; border: 1px solid #2a2f3d; border-radius: 8px; padding: 12px; overflow-y: auto; }
+  h2 { font-size: 13px; color: #8b93a7; margin: 0 0 10px; text-transform: uppercase; }
+  .sid { padding: 8px 10px; border-radius: 6px; cursor: pointer; margin-bottom: 6px; background: #1d2230; }
+  .sid:hover, .sid.active { background: #274060; }
+  #new-session input { width: 100%; box-sizing: border-box; padding: 6px; margin-bottom: 6px; background: #0f1117; color: #d7dce5; border: 1px solid #2a2f3d; border-radius: 4px; }
+  button { background: #2f6fed; color: #fff; border: 0; border-radius: 4px; padding: 6px 12px; cursor: pointer; }
+  button.deny { background: #b3413d; }
+  #events { font-family: ui-monospace, monospace; font-size: 12px; }
+  .ev { padding: 3px 6px; border-left: 3px solid #2f6fed; margin-bottom: 4px; background: #1d2230; border-radius: 0 4px 4px 0; white-space: pre-wrap; word-break: break-all; }
+  .ev.action { border-color: #d29922; } .ev.observation { border-color: #3faa5a; }
+  .ev.llm_error { border-color: #b3413d; } .ev.finish { border-color: #9d6ff0; }
+  .approval { background: #2a2016; border: 1px solid #d29922; border-radius: 6px; padding: 10px; margin-bottom: 8px; font-size: 12px; }
+  #token { position: absolute; top: 14px; right: 20px; width: 220px; background: #0f1117; color: #d7dce5; border: 1px solid #2a2f3d; border-radius: 4px; padding: 5px; }
+  .status { font-size: 11px; color: #8b93a7; }
+</style>
+</head>
+<body>
+<header><h1>PentestAgent Console</h1><input id="token" placeholder="Bearer Token"></header>
+<main>
+  <section id="left">
+    <h2>Sessions</h2>
+    <div id="new-session">
+      <input id="target" placeholder="target, e.g. 192.168.1.100">
+      <button onclick="createSession()">Start</button>
+    </div>
+    <div id="sessions"></div>
+  </section>
+  <section>
+    <h2>Event Stream <span class="status" id="stream-status"></span></h2>
+    <div id="events"></div>
+  </section>
+  <section>
+    <h2>Pending Approvals</h2>
+    <div id="approvals"></div>
+  </section>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+let currentSid = null, es = null;
+
+function authHeaders() {
+  return { "Authorization": "Bearer " + $("token").value.trim() };
+}
+
+async function refreshSessions() {
+  const r = await fetch("/api/sessions", { headers: authHeaders() });
+  if (!r.ok) return;
+  const data = await r.json();
+  $("sessions").innerHTML = "";
+  for (const sid of data.sessions) {
+    const div = document.createElement("div");
+    div.className = "sid" + (sid === currentSid ? " active" : "");
+    div.textContent = sid;
+    div.onclick = () => openSession(sid);
+    $("sessions").appendChild(div);
+  }
+}
+
+async function createSession() {
+  const target = $("target").value.trim();
+  if (!target) return alert("target required");
+  const r = await fetch("/api/sessions", {
+    method: "POST", headers: { ...authHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify({ target }),
+  });
+  if (!r.ok) return alert((await r.json()).detail || r.status);
+  const { session_id } = await r.json();
+  setTimeout(() => { refreshSessions(); openSession(session_id); }, 500);
+}
+
+function openSession(sid) {
+  currentSid = sid;
+  if (es) es.close();
+  $("events").innerHTML = "";
+  $("stream-status").textContent = "(" + sid + ")";
+  es = new EventSource("/api/sessions/" + sid + "/events");
+  es.onmessage = (m) => {
+    const e = JSON.parse(m.data);
+    const div = document.createElement("div");
+    div.className = "ev " + (e.t || "");
+    div.textContent = "#" + (e.seq ?? "?") + " " + e.t + " " +
+      JSON.stringify(e.d).slice(0, 300);
+    $("events").appendChild(div);
+    $("events").scrollTop = $("events").scrollHeight;
+    if (e.t === "finish") { es.close(); $("stream-status").textContent += " [finished]"; }
+  };
+  es.onerror = () => { }; // server closed or auth missing; keep quiet
+  refreshApprovals();
+  refreshSessions();
+}
+
+async function refreshApprovals() {
+  if (!currentSid) return;
+  const r = await fetch(`/api/sessions/${currentSid}/approvals`, { headers: authHeaders() });
+  if (!r.ok) return;
+  const { pending } = await r.json();
+  $("approvals").innerHTML = "";
+  for (const p of pending) {
+    const div = document.createElement("div");
+    div.className = "approval";
+    div.textContent = `[${p.tool}] ${JSON.stringify(p.params).slice(0, 120)}`;
+    const ok = document.createElement("button"); ok.textContent = "Approve";
+    const no = document.createElement("button"); no.textContent = "Deny"; no.className = "deny";
+    ok.style.marginRight = no.style.marginLeft = "6px";
+    ok.onclick = () => decide(p.id, true, div);
+    no.onclick = () => decide(p.id, false, div);
+    div.appendChild(ok); div.appendChild(no);
+    $("approvals").appendChild(div);
+  }
+}
+
+async function decide(id, approved, div) {
+  const r = await fetch(`/api/sessions/${currentSid}/approvals/${id}`, {
+    method: "POST", headers: { ...authHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify({ approved }),
+  });
+  if (r.ok) div.remove();
+}
+
+setInterval(refreshSessions, 5000);
+setInterval(refreshApprovals, 3000);
+refreshSessions();
+</script>
+</body>
+</html>

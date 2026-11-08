@@ -4,7 +4,6 @@ import sys
 
 import pytest
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from modules.tool_invocation.params.common import ParamError, as_bool, as_int
 from modules.tool_invocation.params.nmap_params import NmapParamInterpreter

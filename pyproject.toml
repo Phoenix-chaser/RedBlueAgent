@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pentestagent"
+version = "0.2.0"
+description = "RedBlueAgent - LLM-driven pentest agent (red team) + prompt-injection detector (blue team) + fusion drills"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = [
+    "pydantic>=2.0",
+    "python-dotenv>=0.21",
+    "PyYAML>=6.0",
+    "rich>=13.0",
+    "click>=8.1",
+    "lxml>=4.9",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-mock>=3.10",
+    "ruff>=0.4",
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
+    "httpx>=0.27",
+]
+report-server = ["flask>=2.3"]
+rag = ["chromadb>=0.4", "sentence-transformers>=2.2"]
+server = ["fastapi>=0.110", "uvicorn>=0.29"]
+
+[project.scripts]
+pentestagent = "scripts.run_agent:main"
+
+[tool.setuptools.packages.find]
+include = ["agent*", "modules*", "security*", "utils*", "fusion*", "scripts*", "server*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+# 起步规则集：只拦截语法错误与严重问题（F63/F7/F82），不与既有风格打架；
+# 后续可逐步收紧。
+[tool.ruff.lint]
+select = ["E9", "F63", "F7", "F82"]
