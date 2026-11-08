@@ -15,13 +15,17 @@ class TargetScopeValidator:
 
     def is_in_scope(self, target: str, scope: list[str]) -> bool:
         if not scope:
-            # No scope defined - allow all (open engagement)
-            return True
+            # Fail-closed: without a declared scope nothing is authorized.
+            # An open engagement must pass an explicit wildcard scope (["*"]).
+            return False
 
         # Strip URL scheme and path to get bare host
         host = self._extract_host(target)
 
         for scope_entry in scope:
+            # Explicit wildcard authorizes everything (documented escape hatch)
+            if scope_entry.strip() == "*":
+                return True
             if self._matches(host, scope_entry):
                 return True
         return False

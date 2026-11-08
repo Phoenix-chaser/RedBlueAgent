@@ -5,8 +5,8 @@ llm:
   model: ""                   # Leave blank to use provider default
   max_tokens: 8192
   temperature: 0.1
-  context_window_budget: 180000
-  summarization_threshold: 130000
+  # Token estimate that triggers history compression (HierarchicalSummarizer)
+  context_window_budget: 130000
   keep_recent_turns: 20
 
   # Per-provider context window recommendations:
@@ -18,43 +18,34 @@ llm:
 agent:
   max_iterations: 200
   max_stage_iterations: 30
-  react_output_format: xml  # xml or json
 
-tools:
-  nmap:
-    timeout: 300
-    default_flags: "-sV -sC"
-  dirsearch:
-    timeout: 180
-    wordlist: /usr/share/wordlists/dirb/common.txt
-  nikto:
-    timeout: 300
-  sqlmap:
-    timeout: 300
-    level: 2
-    risk: 1
-  metasploit:
-    timeout: 120
-    msfconsole_path: msfconsole
+# Tool timeouts and parameter defaults are set per-tool in
+# modules/tool_invocation/ (class attributes + params/ interpreters).
 
 security:
   require_approval_for_exploits: true
-  auto_approve_scan_only: true
-  dangerous_patterns:
-    - tool: metasploit
-      pattern: "exploit/"
-    - tool: sqlmap
-      pattern: "--os-shell"
-    - tool: nmap
-      pattern: "--script.*exploit"
+  # Dangerous-op approval policy:
+  #   "" (default)      interactive prompt on a TTY, reject when headless
+  #   interactive       always prompt on stdin
+  #   reject            deny dangerous ops headless, no prompting
+  #   auto-approve-scan auto-approve scan-flavored dangerous ops
+  #                     (sqlmap --level>=3, metasploit auxiliary/), deny the rest
+  #   file              park requests under data/approvals/<sid>/pending/ and
+  #                     wait for decisions/<id>.json (default deny on timeout)
+  # Can be overridden with env SECURITY_APPROVAL_POLICY.
+  # The always-deny patterns live in security/approval_gate.py
+  # (ALWAYS_REQUIRE_APPROVAL) — they are policy-independent.
+  approval_policy: ""
 
 rag:
-  knowledge_base_dir: data/knowledge_base
   vector_store_dir: data/knowledge_base/vector_store
-  embedding_model: all-MiniLM-L6-v2
-  top_k_results: 5
 
 storage:
   sessions_dir: data/sessions
   reports_dir: data/reports
   audit_log: data/audit.log
+
+context_guard:
+  enabled: true
+  honeypot_threshold: 2       # quarantine events before honeypot flag
+  strict: false               # true = refuse to start when the blueteam model fails to load

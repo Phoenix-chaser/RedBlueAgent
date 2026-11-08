@@ -9,6 +9,7 @@ from datetime import datetime
 
 from modules.context_management.state_schema import ToolResult
 from modules.tool_invocation.executor import SubprocessExecutor
+from utils.clip import clip_marked
 
 
 class BaseOutputParser(ABC):
@@ -56,8 +57,8 @@ class BaseTool(ABC):
         return ToolResult(
             tool=self.name,
             command=" ".join(cmd),
-            raw_stdout=raw.stdout[:50000],  # Truncate very large outputs
-            raw_stderr=raw.stderr[:5000],
+            raw_stdout=clip_marked(raw.stdout, 50000),  # Truncate with explicit marker
+            raw_stderr=clip_marked(raw.stderr, 5000),
             parsed=parsed,
             success=success,
             elapsed_seconds=raw.elapsed_seconds,

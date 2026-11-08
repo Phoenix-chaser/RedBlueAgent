@@ -10,6 +10,12 @@ from security.audit_logger import AuditLogger
 from security.scope_validator import TargetScopeValidator
 
 
+# Params that may carry a target host/URL. dirsearch and sqlmap pass their
+# destination via "url", metasploit via "rhosts" (alias "target"); every
+# target-bearing param must pass scope validation.
+TARGET_PARAM_KEYS = ("target", "url", "host", "rhosts")
+
+
 class SecurityBoundaryController:
     def __init__(
         self,
@@ -22,14 +28,26 @@ class SecurityBoundaryController:
         self.audit_logger = audit_logger or AuditLogger()
 
     def setup(self, session_id: str, target: str, scope: list[str]) -> None:
+        # File-mode approval gates name their request dirs after the session
+        set_session = getattr(self.approval_gate, "set_session", None)
+        if callable(set_session):
+            set_session(session_id)
         self.audit_logger.log_session_start(session_id, target, scope)
 
     def validate(self, action: ActionDecision, state: PentestState) -> bool:
-        # 1. Scope check
-        target_from_params = action.params.get("target", "") or state.target
-        if not self.scope_validator.is_in_scope(target_from_params, state.scope):
-            self.audit_logger.log_violation("SCOPE_VIOLATION", action)
-            return False
+        # 1. Scope check — validate EVERY target-bearing param; only fall back
+        #    to the engagement target when the action carries none of them.
+        targets = []
+        for key in TARGET_PARAM_KEYS:
+            value = str(action.params.get(key) or "").strip()
+            if value:
+                targets.append(value)
+        if not targets:
+            targets = [state.target]
+        for t in targets:
+            if not self.scope_validator.is_in_scope(t, state.scope):
+                self.audit_logger.log_violation("SCOPE_VIOLATION", action)
+                return False
 
         # 2. Dangerous operation check
         if self.approval_gate.is_dangerous(action):

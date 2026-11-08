@@ -83,8 +83,14 @@ class ContextGuard:
     # ────────────────────────── 工厂 ──────────────────────────
     @classmethod
     def create(cls, audit_logger=None, blueteam_root: Path | None = None,
-               honeypot_threshold: int = 2) -> "ContextGuard | None":
-        """加载 blueteam 检测器（L0+L1 轻量配置）。失败返回 None（守卫禁用）。"""
+               honeypot_threshold: int = 2,
+               strict: bool = False) -> "ContextGuard | None":
+        """加载 blueteam 检测器（L0+L1 轻量配置）。
+
+        失败时默认降级为直通（返回 None），但降级必须可见：控制台告警 +
+        GUARD_DEGRADED 审计事件，事后可从日志追溯防线失效时刻。
+        strict=True 时直接抛错拒绝启动（fail-fast）。
+        """
         root = Path(blueteam_root) if blueteam_root else _BLUETEAM_ROOT
         # 用对抗增强版混合模型：守卫部署域是「攻击者主动规避 + 工具输出」，
         # 增强训练的同义改写鲁棒性在该域实测优于无增强版（演习定位过其漏检），
@@ -104,8 +110,24 @@ class ContextGuard:
             scan = DeobfuscatedScan(defense)
             return cls(scan, thr, audit_logger=audit_logger,
                        honeypot_threshold=honeypot_threshold)
-        except Exception as e:  # 模型缺失/依赖不全 → 直通降级
-            print(f"[ContextGuard] 蓝队检测器不可用，守卫降级为直通：{e}")
+        except Exception as e:  # 模型缺失/依赖不全 → 直通降级（必须显式可见）
+            reason = f"{type(e).__name__}: {e}"
+            if strict:
+                raise RuntimeError(
+                    f"ContextGuard strict 模式：蓝队检测器加载失败（{reason}）。"
+                    "运行 blueteam/run_all.sh 重建模型，或在 config 中将 "
+                    "context_guard.enabled 置为 false 显式关闭守卫。"
+                ) from e
+            print(
+                "[ContextGuard][警告] 蓝队检测器不可用，守卫降级为直通——"
+                "入站提示注入防御已失效！\n"
+                f"  原因: {reason}\n"
+                "  恢复: 运行 blueteam/run_all.sh 重建模型；"
+                "如需启动即失败，设 GUARD_STRICT=1 或 config context_guard.strict: true。"
+            )
+            if audit_logger is not None:
+                audit_logger.log_guard_event(
+                    dict(event="GUARD_DEGRADED", reason=reason))
             return None
 
     # ────────────────────────── 扫描 ──────────────────────────

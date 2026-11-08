@@ -15,9 +15,10 @@ class HierarchicalSummarizer:
     - Structured state (PentestState fields) is ALWAYS preserved verbatim
     """
 
-    def __init__(self, llm=None, keep_recent: int = 20):
+    def __init__(self, llm=None, keep_recent: int = 20, token_budget: int = 130_000):
         self.llm = llm
         self.keep_recent = keep_recent
+        self.token_budget = token_budget
 
     def estimate_tokens(self, state: PentestState) -> int:
         """Rough estimate: 1 token ≈ 4 chars."""
@@ -29,10 +30,11 @@ class HierarchicalSummarizer:
         return total_chars // 4
 
     def summarize_if_needed(
-        self, state: PentestState, token_budget: int = 130_000
+        self, state: PentestState, token_budget: int | None = None
     ) -> PentestState:
+        budget = token_budget if token_budget is not None else self.token_budget
         estimated = self.estimate_tokens(state)
-        if estimated < token_budget or len(state.llm_turns) <= self.keep_recent:
+        if estimated < budget or len(state.llm_turns) <= self.keep_recent:
             return state
 
         turns_to_compress = state.llm_turns[: -self.keep_recent]

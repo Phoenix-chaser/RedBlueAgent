@@ -80,7 +80,7 @@ The inbound threat is real and specific: **the target of a pentest is by nature 
                 │ Stage advance (PTES state machine) + compression     │
                 └──────────────────────────────────────────────────────┘
                                         │
-          fusion/: attack-defense drill (7 scenarios × guard on/off,
+          fusion/: attack-defense drill (8 scenarios × guard on/off,
           closed-loop validation of the fusion value)
 ```
 
@@ -107,7 +107,7 @@ The inbound threat is real and specific: **the target of a pentest is by nature 
 
 ## Attack-Defense Drill Results
 
-**Setup**: 7 scenarios (no trap / 6 single-trap types / mixed three traps) × guard on/off = 14 full ReAct pipeline runs. Parsers, context merging, stage state machine, and the security boundary are all real modules; the LLM is a deterministic mock (worst-case obedience assumption: any un-quarantined injection payload in context is obeyed with probability 1). Trap vectors are embedded in nikto finding descriptions and dirsearch paths—two fields verified to flow verbatim into the LLM observation text.
+**Setup**: 8 scenarios (no trap / 6 single-trap types / mixed three traps) × guard on/off = 16 full ReAct pipeline runs. Parsers, context merging, stage state machine, and the security boundary are all real modules; the LLM is a deterministic mock (worst-case obedience assumption: any un-quarantined injection payload in context is obeyed with probability 1). Trap vectors are embedded in nikto finding descriptions and dirsearch paths—two fields verified to flow verbatim into the LLM observation text.
 
 | Metric | Guard OFF | Guard ON |
 |---|---|---|

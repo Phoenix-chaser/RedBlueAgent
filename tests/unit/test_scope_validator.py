@@ -2,15 +2,20 @@
 import pytest
 import sys
 import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from security.scope_validator import TargetScopeValidator
 
 
-def test_empty_scope_allows_all():
+def test_empty_scope_fails_closed():
     v = TargetScopeValidator()
-    assert v.is_in_scope("192.168.1.100", []) is True
-    assert v.is_in_scope("10.0.0.1", []) is True
+    assert v.is_in_scope("192.168.1.100", []) is False
+    assert v.is_in_scope("10.0.0.1", []) is False
+
+
+def test_wildcard_scope_allows_all():
+    v = TargetScopeValidator()
+    assert v.is_in_scope("192.168.1.100", ["*"]) is True
+    assert v.is_in_scope("any.example.org", ["*"]) is True
 
 
 def test_exact_ip_match():
