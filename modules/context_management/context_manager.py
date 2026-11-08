@@ -18,6 +18,7 @@ from modules.context_management.state_schema import (
     Severity,
     AttackPathEntry,
 )
+from utils.clip import clip_marked
 
 
 class ContextManager:
@@ -47,7 +48,7 @@ class ContextManager:
             action_type=action.type,
             action_tool=action.tool,
             action_params=action.params,
-            observation=obs_str[:3000],  # Cap per-turn observation
+            observation=clip_marked(obs_str, 3000),  # Cap per-turn observation with explicit marker
         )
         state.llm_turns.append(turn)
 
@@ -441,30 +442,58 @@ class ContextManager:
 
             if tool == "nmap":
                 hosts = parsed.get("hosts", [])
-                lines.append(f"  Hosts found: {len(hosts)}")
-                for h in hosts[:5]:
-                    ports_summary = ", ".join(
-                        f"{p['port']}/{p['service']}" for p in h.get("ports", [])[:10]
-                    )
-                    lines.append(f"  {h['ip']} ({h.get('hostname','')}): {ports_summary}")
+                if not hosts:
+                    lines.append(
+                        "  DIAGNOSTIC: 0 hosts found —— 目标可能离线、被防火墙过滤或"
+                        "禁 ping。先核对 target 是否正确、端口是否可达；"
+                        "这不是扫描失败，不要原样重跑。")
+                else:
+                    if len(hosts) > 5:
+                        lines.append(f"  共 {len(hosts)} 台主机，显示前 5 台（全部已并入状态）")
+                    lines.append(f"  Hosts found: {len(hosts)}")
+                    for h in hosts[:5]:
+                        ports_summary = ", ".join(
+                            f"{p['port']}/{p['service']}" for p in h.get("ports", [])[:10]
+                        )
+                        lines.append(f"  {h['ip']} ({h.get('hostname','')}): {ports_summary}")
 
             elif tool == "dirsearch":
                 paths = parsed.get("paths", [])
-                lines.append(f"  Paths found: {len(paths)}")
-                for p in paths[:20]:
-                    lines.append(f"  [{p['status']}] {p['path']}")
+                if not paths:
+                    lines.append(
+                        "  DIAGNOSTIC: 0 paths found —— 字典可能不适用于该技术栈，"
+                        "或目标对未知路径做了统一响应。可尝试换 extensions"
+                        "（如 php/html/js/asp）或确认 URL 指向正确端口；"
+                        "0 结果本身是有效结论。")
+                else:
+                    if len(paths) > 20:
+                        lines.append(f"  共 {len(paths)} 条路径，显示前 20 条（全部已并入状态）")
+                    lines.append(f"  Paths found: {len(paths)}")
+                    for p in paths[:20]:
+                        lines.append(f"  [{p['status']}] {p['path']}")
 
             elif tool == "nikto":
                 findings = parsed.get("findings", [])
-                lines.append(f"  Findings: {len(findings)}")
-                for f in findings[:10]:
-                    lines.append(f"  - {f['description'][:150]}")
+                if not findings:
+                    lines.append(
+                        "  DIAGNOSTIC: 0 findings —— nikto 未发现问题，这是有效结论；"
+                        "结合已发现的服务版本继续推进，无需重跑。")
+                else:
+                    if len(findings) > 10:
+                        lines.append(f"  共 {len(findings)} 条发现，显示前 10 条（全部已并入状态）")
+                    lines.append(f"  Findings: {len(findings)}")
+                    for f in findings[:10]:
+                        lines.append(f"  - {f['description'][:150]}")
 
             elif tool == "sqlmap":
                 lines.append(f"  Injectable: {parsed.get('injectable', False)}")
                 if parsed.get("databases"):
                     lines.append(f"  Databases: {', '.join(parsed['databases'])}")
                 lines.append(f"  Summary: {parsed.get('raw_summary','')[:300]}")
+                if not parsed.get("injectable"):
+                    lines.append(
+                        "  DIAGNOSTIC: 未发现注入点——有效结论。若怀疑存在注入，"
+                        "可提高 level/risk 或更换带参数的 URL 重试，不要原样重跑。")
 
             elif tool == "metasploit":
                 lines.append(f"  Exploit success: {parsed.get('exploit_success', False)}")
@@ -472,6 +501,14 @@ class ContextManager:
                 lines.append(f"  Session type: {parsed.get('session_type', 'none')}")
                 if parsed.get("error_messages"):
                     lines.append(f"  Errors: {parsed['error_messages'][0][:200]}")
+                if not parsed.get("exploit_success") and not parsed.get("error_messages"):
+                    lines.append(
+                        "  DIAGNOSTIC: 利用未成功且无报错——核对模块与目标服务版本"
+                        "是否匹配、RPORT/参数是否正确。")
+
+        # 全文存档指引（seq 补全的廉价等价）：截断发生时 LLM 知道原文去处
+        if result.archive_path:
+            lines.append(f"[完整原始输出已存档: {result.archive_path}]")
 
         return "\n".join(lines)
 

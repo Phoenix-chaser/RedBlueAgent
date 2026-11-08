@@ -195,6 +195,9 @@ class ToolResult(BaseModel):
     elapsed_seconds: float = 0.0
     error_message: str | None = None
     timestamp: datetime = Field(default_factory=datetime.utcnow)
+    # 完整原始输出的存档路径（seq 补全的廉价等价物）：截断发生时 LLM 仍
+    # 知道全文去向。由 react_loop 调用 EventLog.save_tool_output 填充。
+    archive_path: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -202,7 +205,9 @@ class ToolResult(BaseModel):
 # ---------------------------------------------------------------------------
 
 class ActionDecision(BaseModel):
-    type: Literal["tool", "finish", "wait"] = "tool"
+    # "parallel"：params.actions 携带 2-3 个相互独立的扫描子动作
+    # （护栏见 system_prompt：仅限信息收集/漏洞扫描，禁危险动作）
+    type: Literal["tool", "finish", "wait", "parallel"] = "tool"
     tool: str | None = None
     params: dict[str, Any] = Field(default_factory=dict)
     rationale: str = ""
