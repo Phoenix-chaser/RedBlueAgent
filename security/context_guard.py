@@ -23,6 +23,8 @@ blueteam 训练流程产出。加载失败时守卫自动降级为「直通 + �
 """
 from __future__ import annotations
 
+import json
+import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -79,6 +81,10 @@ class ContextGuard:
         self.honeypot_threshold = honeypot_threshold
         self.stats = GuardStats()
         self.honeypot_suspected = False
+        # 污点签名库（CaMeL/FIDES 的最小可行动版 [6]）：被隔离载荷/蜜标
+        # 响应的特征片段——后续动作参数（外发 sink）命中即视为
+        # 「不可信数据试图借 Agent 之手执行/外传」
+        self.taints: list[str] = []
 
     # ────────────────────────── 工厂 ──────────────────────────
     @classmethod
@@ -147,6 +153,7 @@ class ContextGuard:
                 self.stats.hits.append(
                     dict(tool=tool, field=path, score=round(score, 3),
                          preview=value[:60]))
+                self.add_taint(value, source=f"quarantine:{tool}:{path}")
                 if self.audit is not None:
                     self.audit.log_guard_event(
                         dict(event="QUARANTINE", tool=tool, field=path,
@@ -160,6 +167,46 @@ class ContextGuard:
             return [self._sanitize_value(v, f"{path}[{i}]", tool)
                     for i, v in enumerate(value)]
         return value
+
+    # ── 污点签名（CaMeL/FIDES 最小版 [6]；蜜标内容亦经 add_taint 入库 [10]）──
+
+    @staticmethod
+    def _normalize(text: str) -> str:
+        return re.sub(r"\s+", " ", text.strip()).lower()
+
+    @staticmethod
+    def _forms(text: str) -> list[str]:
+        """同一文本的两种可比形态：原文规范化 + JSON ascii 转义形态
+        （动作参数常以 json.dumps 序列化，中文默认变 \\uXXXX——签名与
+        命中必须在同一形态空间，否则永远匹配不上）。"""
+        plain = ContextGuard._normalize(text)
+        escaped = json.dumps(text, ensure_ascii=True)[1:-1].lower()
+        return [plain, escaped]
+
+    def add_taint(self, text: str, source: str = "quarantine") -> None:
+        """登记不可信数据签名。两类粒度：
+        1. 端部签名：两种形态各取首/尾 60 字符（长文本中间被改写仍命中端部）；
+        2. 高信息量 token：≥12 位字母数字串（凭据、密钥、长路径段）——
+           外传/滥用常只引用片段而非整段，端部签名覆盖不到。"""
+        for form in self._forms(text):
+            if len(form) < 12:
+                continue
+            for sig in (form[:60], form[-60:]):
+                if len(sig) >= 12 and sig not in self.taints:
+                    self.taints.append(sig)
+        tokens = re.findall(r"[A-Za-z0-9_\-]{12,}", text)
+        for tok in tokens[:10]:
+            low = tok.lower()
+            if low not in self.taints:
+                self.taints.append(low)
+
+    def taint_hit(self, params_str: str) -> str | None:
+        """外发 sink 检查：动作参数（两种形态）包含任一污点签名 → 命中。"""
+        cands = self._forms(params_str)
+        for sig in self.taints:
+            if any(sig in c for c in cands):
+                return sig
+        return None
 
     def guard_observation(self, observation: ToolResult) -> ToolResult:
         """对工具输出做隔离清洗，返回新的 ToolResult。"""

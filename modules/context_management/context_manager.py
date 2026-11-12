@@ -446,11 +446,15 @@ class ContextManager:
             lines.append(f"Success. Elapsed: {result.elapsed_seconds:.1f}s")
 
         diagnostics: list[str] = []
-        if result.parsed:
+        parsed = dict(result.parsed or {})
+        # 蜜标警示由 harness 注入（react_loop），置于 UNTRUSTED 之外渲染
+        honey_warning = parsed.pop("_honeytoken_warning", None)
+        if honey_warning:
+            diagnostics.append(f"  ⚠ HONEYTOKEN WARNING: {honey_warning}")
+        if parsed:
             parsed_lines = ["Parsed Results:"]
             # Tool-specific summarization
             tool = result.tool.lower()
-            parsed = result.parsed
 
             if tool == "nmap":
                 hosts = parsed.get("hosts", [])

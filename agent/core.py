@@ -159,6 +159,8 @@ class PentestAgent:
             context_guard=self.context_guard,
             max_iterations=agent_cfg.get("max_iterations", 200),
             max_stage_iterations=agent_cfg.get("max_stage_iterations", 30),
+            taint_policy=security_cfg.get("taint_policy", "block"),
+            honeytokens=security_cfg.get("honeytokens", []),
         )
 
     def _sessions_dir(self) -> Path:

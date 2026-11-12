@@ -106,6 +106,8 @@ The inbound threat is real and specific: **the target of a pentest is by nature 
 - ContextGuard embedded at the Act→Observe checkpoint of the ReAct loop, performing field-level quarantine of tool output [6]
 - Content gating: technical identifiers (paths, version strings) are not sent to the classifier; only "natural-language instruction-shaped" text is inspected
 - Honeypot awareness: ≥2 quarantines in a session flag the target as a suspected honeypot, written to the audit log
+- Taint tracking (minimal CaMeL [6]): quarantined payloads and honeytoken responses register signatures (head/tail 60 chars + high-information tokens, in both raw and JSON-escaped forms); later actions whose parameters hit a signature are handled by `taint_policy` (block/warn) — stopping untrusted data from executing/exfiltrating through the agent
+- Honeytokens (AgentShield [10]): `security.honeytokens` declares paths a legitimate test never needs to visit; visiting is allowed (it's a finding) but audited, and the response auto-enters the taint store — later *use* of honeytoken content is blocked (a honeytoken endpoint ships in the built-in range)
 - Attack-defense drill: trap range + deterministic MockLLM to quantify guard value
 
 ## Console Tour
@@ -393,6 +395,8 @@ Inline markers [n] in the text point to the entries below (arXiv preprints liste
 [8] R. Nakano, T. Fayyazi, L. Yang, et al., "Guided Reasoning in LLM-Driven Penetration Testing Using Structured Attack Trees," arXiv:2509.07939, 2025. — deterministic task trees lift small-model subtask completion 4–5× with far fewer queries (our KB-driven all-stage attack-plan injection).
 [9] H. Dai, Y. Li, J. Yan, et al., "RefPentester: Knowledge-Informed Self-Reflective Penetration Testing," arXiv:2505.07089, 2025. — stage+context conditional retrieval of ATT&CK/OTG knowledge and two-level backtracking on failure (our attack_kb retrieval and failure-aware backoff).
 
+[10] Y. H. Rassul and T. A. Rashid, "AgentShield," arXiv:2605.11026, 2026. — honeytokens: decoy credentials a legitimate agent should never touch; use signals compromise (our honeytokens config, visit auditing, and the response-into-taint closed loop).
+
 <details>
 <summary><b>BibTeX (click to expand)</b></summary>
 
@@ -459,6 +463,13 @@ Inline markers [n] in the text point to the entries below (arXiv preprints liste
   title   = {RefPentester: Knowledge-Informed Self-Reflective Penetration Testing},
   journal = {arXiv preprint arXiv:2505.07089},
   year    = {2025}
+}
+
+@article{rassul2026agentshield,
+  author  = {Rassul, Yassin H. and Rashid, Tarik A.},
+  title   = {AgentShield},
+  journal = {arXiv preprint arXiv:2605.11026},
+  year    = {2026}
 }
 ```
 

@@ -100,6 +100,8 @@ LLM 驱动的自动化渗透测试 Agent（红队）+ 提示注入攻击检测�
 - ContextGuard 嵌入 ReAct 循环 Act→Observe 检查点，对工具输出做字段级隔离 [6]
 - 内容门控：技术标识符（路径、版本号）不送检，只检「自然语言指令形态」文本；未检出内容再经 Spotlighting 分隔符包裹 [2]
 - 蜜罐感知：会话累计隔离 ≥2 次标记目标疑似蜜罐，写入审计日志
+- 污点追踪（CaMeL 最小版 [6]）：被隔离载荷/蜜标响应登记签名（端部 60 字符 + 高信息量 token，原文/JSON 转义双形态），后续动作参数命中即按 `taint_policy`（block/warn）处置——拦住「不可信数据借 Agent 之手执行/外传」
+- 蜜标（AgentShield [10]）：`security.honeytokens` 声明合法测试永不需要访问的路径片段；访问放行（属于发现）但审计告警 + 响应自动入污点库——后续**使用**蜜标内容将被污点策略拦截（内置靶场已埋蜜标端点）
 - 攻防演习：陷阱靶场 + 确定性 MockLLM，量化守卫价值
 
 ## 界面一览
@@ -389,7 +391,7 @@ v0.2 已完成（工程化改造，借鉴 SPECTRE 实践，详见 [docs/optimiza
 　　→ 检测器榜单排名不可跨基准迁移而 FPR 可迁移、训练分布匹配解释高分（对应本项目模板级不相交划分与 FPR 约束阈值）。
 
 [6] BHAGWATKAR R, KASA K, PURI A, et al. Indirect prompt injections: are firewalls all you need?[EB/OL]. (2025-10-06)[2026-11-12]. https://arxiv.org/abs/2510.05244.
-　　→ agent-工具边界的输出防火墙即可阻断几乎全部间接注入且不损效用（对应本项目 ContextGuard 的定位）。
+　　→ agent-工具边界的输出防火墙即可阻断几乎全部间接注入且不损效用；CaMeL（arXiv:2503.18813）进一步以控制流完整性与数据污点追踪防御（对应本项目 ContextGuard 的定位与污点追踪最小版）。
 
 [7] ABRAMOVICH T, UDESHI M, SHAO M, et al. EnIGMA[C]//Proceedings of the 42nd International Conference on Machine Learning (ICML 2025). 2025. arXiv:2409.16165.
 　　→ 为交互式安全工具设计 LLM 工具接口层显著提升解题率（对应本项目参数/输出双层解释器）。
@@ -399,6 +401,9 @@ v0.2 已完成（工程化改造，借鉴 SPECTRE 实践，详见 [docs/optimiza
 
 [9] DAI H, LI Y, YAN J, et al. RefPentester: knowledge-informed self-reflective penetration testing[EB/OL]. (2025-05-11)[2026-11-12]. https://arxiv.org/abs/2505.07089.
 　　→ 按「阶段+上下文」条件检索 ATT&CK/OTG 知识注入双层提示；失败按层级两级回退（低层错退一步、高层错退两步重检索）（对应本项目 attack_kb 条件检索与失败感知回退）。
+
+[10] RASSUL Y H, RASHID T A. AgentShield[EB/OL]. (2026-05)[2026-11-12]. https://arxiv.org/abs/2605.11026.
+　　→ 蜜标/honeytoken：合法 agent 永不应触碰的诱饵凭证，一旦使用即失陷信号（对应本项目 honeytokens 配置、蜜标访问审计与「响应入污点」闭环）。
 
 <details>
 <summary><b>BibTeX（点击展开复制）</b></summary>
@@ -466,6 +471,13 @@ v0.2 已完成（工程化改造，借鉴 SPECTRE 实践，详见 [docs/optimiza
   title   = {RefPentester: Knowledge-Informed Self-Reflective Penetration Testing},
   journal = {arXiv preprint arXiv:2505.07089},
   year    = {2025}
+}
+
+@article{rassul2026agentshield,
+  author  = {Rassul, Yassin H. and Rashid, Tarik A.},
+  title   = {AgentShield},
+  journal = {arXiv preprint arXiv:2605.11026},
+  year    = {2026}
 }
 ```
 

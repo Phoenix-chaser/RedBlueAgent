@@ -24,6 +24,13 @@ agent:
 
 security:
   require_approval_for_exploits: true
+  # 污点策略（CaMeL 最小版）：动作参数命中被隔离载荷/蜜标内容的签名时
+  # block=拦截并回喂可执行指引 | warn=放行仅审计
+  taint_policy: block
+  # 蜜标（AgentShield）：合法测试永不需要访问的路径片段；访问即审计，
+  # 响应自动登记为污点（后续使用该内容将被 taint_policy 处置）
+  honeytokens: []
+  # 示例: honeytokens: ["honeytoken-", "/.git/config.backup"]
   # Dangerous-op approval policy:
   #   "" (default)      interactive prompt on a TTY, reject when headless
   #   interactive       always prompt on stdin
