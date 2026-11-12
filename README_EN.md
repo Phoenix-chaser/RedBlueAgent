@@ -89,9 +89,9 @@ The inbound threat is real and specific: **the target of a pentest is by nature 
 ### Three Components
 
 **Red Team (repo root) — automated pentest engine**
-- ReAct paradigm × PTES 7-stage state machine (target confirmation → information gathering → vulnerability scanning → vulnerability analysis → exploitation → post-exploitation → report); stage advance gated by preconditions, with force-advance anti-stall
+- ReAct paradigm × PTES 7-stage state machine (target confirmation → information gathering → vulnerability scanning → vulnerability analysis → exploitation → post-exploitation → report); stage advance gated by preconditions, with force-advance anti-stall [3]
 - Five tools under unified dispatch: nmap / nikto / dirsearch / sqlmap / metasploit
-- **Dual-layer tool interpreters**: loose LLM parameters (URL-as-IP, booleans-as-strings) are normalized into legal command lines (with an nmap script whitelist against hallucination); nmap XML / dirsearch·nikto JSON / sqlmap text are parsed into structured data; illegal parameters produce readable errors fed back to the LLM
+- **Dual-layer tool interpreters**: loose LLM parameters (URL-as-IP, booleans-as-strings) are normalized into legal command lines (with an nmap script whitelist against hallucination); nmap XML / dirsearch·nikto JSON / sqlmap text are parsed into structured data; illegal parameters and errors produce "next steps that name a callable tool" fed back to the LLM [1][7]
 - Context engineering: hierarchical summarization for long histories; result merging auto-infers vulnerability entries via rule bases (14 dangerous services, 13 dev-server signatures, 15 sensitive paths) with component-prefix dedup
 - Multi-model support: DeepSeek / Kimi / Zhipu GLM / Claude / OpenAI via a zero-dependency LLM kernel
 - Optional RAG: CVE / exploit knowledge base for decision enhancement
@@ -99,10 +99,10 @@ The inbound threat is real and specific: **the target of a pentest is by nature 
 **Blue Team (blueteam/) — prompt injection detector**
 - Chinese-English template dataset: 9 attack categories + adversarial benign samples (quoted attack strings in translation requests, security-research questions, etc.) + a tool-output benign class (domain adaptation)
 - Three-level detection: L0 normalization/recursive decoding (Base64/Hex/ROT13/reversal/URL/full-width/zero-width) → L1 rules ⊕ hybrid-feature LR → L2 cascade (stacking meta-learner + char-level TextCNN)
-- Full evaluation methodology: template-disjoint splits (anti-memorization), bootstrap confidence intervals, FPR-constrained security thresholds, robustness experiments under 5 adversarial transformations
+- Full evaluation methodology: template-disjoint splits (anti-memorization), bootstrap confidence intervals, FPR-constrained security thresholds, robustness experiments under 5 adversarial transformations [5]
 
 **Fusion layer (fusion/ + security/context_guard.py) — context guard & drill**
-- ContextGuard embedded at the Act→Observe checkpoint of the ReAct loop, performing field-level quarantine of tool output
+- ContextGuard embedded at the Act→Observe checkpoint of the ReAct loop, performing field-level quarantine of tool output [6]
 - Content gating: technical identifiers (paths, version strings) are not sent to the classifier; only "natural-language instruction-shaped" text is inspected
 - Honeypot awareness: ≥2 quarantines in a session flag the target as a suspected honeypot, written to the audit log
 - Attack-defense drill: trap range + deterministic MockLLM to quantify guard value
@@ -216,7 +216,7 @@ Common arguments:
 
 Custom OpenAI-compatible endpoint (e.g. Zhipu Coding Plan): add `LLM_BASE_URL=https://open.bigmodel.cn/api/coding/paas/v4` to `.env`.
 
-**Crash resume**: after kill -9 / SIGTERM / power loss, rerun with `--session-id <sid>` — a write-ahead event log plus snapshots rebuild state; a turn cut in half gets a system resume note; executed actions stay blocked across restarts; double-running a live session is rejected by an instance lock.
+**Crash resume**: after kill -9 / SIGTERM / power loss, rerun with `--session-id <sid>` — a write-ahead event log plus snapshots rebuild state; a turn cut in half gets a system resume note; executed actions stay blocked across restarts; double-running a live session is rejected by an instance lock [4].
 
 **Web console + remote approval**:
 
@@ -363,18 +363,80 @@ Open:
 
 ## References
 
-Selected designs in this project are grounded in public literature (markers [1][2] in the text):
+Inline markers [n] in the text point to the entries below (arXiv preprints listed as such; BibTeX in the collapsible block).
 
-- [1] *MCP Error Messages Written for Developers Hurt the Most Capable Agents Most.* arXiv:2609.35381, 2026 — rules for tool-error feedback: every "next step" must name a callable tool (rewrites lift recovery to 84–88%; counter-intuitively, stronger models lose more from non-executable steps).
-- [2] *Defending Against Indirect Prompt Injection Attacks With Spotlighting.* arXiv:2403.14720, 2024 — UNTRUSTED delimiters around tool output plus a system-prompt declaration (delimiting variant; reported ASR 50%→2%), as a second layer behind ContextGuard quarantine.
+**Implemented from (methods this project adopts)**
 
-Independent works converging on mechanisms this project already ships:
+[1] X. Xu and W. Wu, "MCP Error Messages Written for Developers Hurt the Most Capable Agents Most," arXiv:2609.35381, 2026.
+    → Every "next step" in tool-error feedback must name a callable tool; rewrites lift task recovery 45%→84–88%, and stronger models lose *more* from non-executable guidance.
 
-- Goal-Autopilot (arXiv:2606.11688) — precondition-gated FSM (our PTES stage machine)
-- TapeAgents (arXiv:2412.08445) — replayable structured logs (our WAL event journal / crash resume)
-- Passing the Test You Trained On (arXiv:2610.03448) — contamination-proof detector evaluation with FPR constraints (our template-disjoint split)
-- Indirect Prompt Injections: Are Firewalls All You Need? (arXiv:2510.05244, NeurIPS 2025) — agent-tool boundary output firewalls (ContextGuard's positioning)
-- EnIGMA (arXiv:2409.16165, ICML 2025) — wrapping interactive security tools (our dual param/output interpreters)
+[2] K. Hines, G. Lopez, M. Hall, et al., "Defending Against Indirect Prompt Injection Attacks With Spotlighting," arXiv:2403.14720, 2024.
+    → UNTRUSTED delimiters around tool output plus a system-prompt declaration (delimiting variant); reported injection ASR 50%→2%. Deployed here on both untrusted-data entry points (tool observations and the state snapshot), as a second layer behind ContextGuard quarantine.
+
+**Converging evidence (independent works reaching the same conclusions as mechanisms we already ship)**
+
+[3] Y. Deng, "Goal-Autopilot," arXiv:2606.11688, 2026. — precondition-gated FSM, fabrication 33.7%→0.67% (our PTES stage gating).
+[4] D. Bahdanau, N. Gontier, G. Huang, et al., "TapeAgents," arXiv:2412.08445, 2024. — replayable structured logs (our WAL journal / crash resume).
+[5] Z. Liu, "Passing the Test You Trained On: Re-evaluating Prompt-Injection Detectors for LLM Agents," arXiv:2610.03448, 2026. — benchmark ranks don't transfer while FPR does; training-distribution match explains leaderboard wins (our template-disjoint split and FPR-constrained thresholds).
+[6] R. Bhagwatkar, K. Kasa, A. Puri, et al., "Indirect Prompt Injections: Are Firewalls All You Need?," arXiv:2510.05244, 2025. — agent-tool boundary output firewalls block nearly all indirect injection at no utility cost (ContextGuard's positioning).
+[7] T. Abramovich, M. Udeshi, M. Shao, et al., "EnIGMA," in Proc. ICML 2025, arXiv:2409.16165. — LLM tool-interface layers for interactive security tools materially improve solve rates (our dual param/output interpreters).
+
+<details>
+<summary><b>BibTeX (click to expand)</b></summary>
+
+```bibtex
+@article{xu2026mcperrors,
+  author  = {Xu, Xiaonan and Wu, Wenjing},
+  title   = {{MCP} Error Messages Written for Developers Hurt the Most Capable Agents Most},
+  journal = {arXiv preprint arXiv:2609.35381},
+  year    = {2026}
+}
+
+@article{hines2024spotlighting,
+  author  = {Hines, Keegan and Lopez, Gary and Hall, Matthew and Zarfati, Federico and Zunger, Yonatan and Kiciman, Emre},
+  title   = {Defending Against Indirect Prompt Injection Attacks With Spotlighting},
+  journal = {arXiv preprint arXiv:2403.14720},
+  year    = {2024}
+}
+
+@article{deng2026goalautopilot,
+  author  = {Deng, Youwang},
+  title   = {Goal-Autopilot},
+  journal = {arXiv preprint arXiv:2606.11688},
+  year    = {2026}
+}
+
+@article{bahdanau2024tapeagents,
+  author  = {Bahdanau, Dzmitry and Gontier, Nicolas and Huang, Gabriel and Kamalloo, Ehsan and Pardinas, Rafael and Pich{\'e}, Alex and Scholak, Torsten and Shliazhko, Oleh and Tremblay, Jordan Prince and Ghanem, Karam and Parikh, Soham and Tiwari, Mitul and Vohra, Quaizar},
+  title   = {TapeAgents},
+  journal = {arXiv preprint arXiv:2412.08445},
+  year    = {2024}
+}
+
+@article{liu2026passingthetest,
+  author  = {Liu, Zhuowen},
+  title   = {Passing the Test You Trained On: Re-evaluating Prompt-Injection Detectors for {LLM} Agents},
+  journal = {arXiv preprint arXiv:2610.03448},
+  year    = {2026}
+}
+
+@article{bhagwatkar2025firewalls,
+  author  = {Bhagwatkar, Rishika and Kasa, Kevin and Puri, Abhay and Huang, Gabriel and Rish, Irina and Taylor, Graham W. and Dvijotham, Krishnamurthy Dj and Lacoste, Alexandre},
+  title   = {Indirect Prompt Injections: Are Firewalls All You Need?},
+  journal = {arXiv preprint arXiv:2510.05244},
+  year    = {2025}
+}
+
+@inproceedings{abramovich2025enigma,
+  author    = {Abramovich, Talor and Udeshi, Meet and Shao, Minghao and Lieret, Kilian and Xi, Haoran and Milner, Kimberly and Jancheska, Sofija and Yang, John and Jimenez, Carlos E. and Khorrami, Farshad and Krishnamurthy, Prashanth and Dolan-Gavitt, Brendan and Shafique, Muhammad and Narasimhan, Karthik and Karri, Ramesh and Press, Ofir},
+  title     = {{EnIGMA}},
+  booktitle = {Proceedings of the 42nd International Conference on Machine Learning (ICML)},
+  year      = {2025},
+  note      = {arXiv:2409.16165}
+}
+```
+
+</details>
 
 ## Acknowledgments & Disclaimer
 

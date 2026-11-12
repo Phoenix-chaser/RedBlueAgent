@@ -83,9 +83,9 @@ LLM 驱动的自动化渗透测试 Agent（红队）+ 提示注入攻击检测�
 ### 三大组成部分
 
 **红队（主目录）——自动化渗透引擎**
-- ReAct 范式 × PTES 七阶段状态机（目标确认→信息收集→漏洞扫描→漏洞分析→漏洞利用→后渗透→报告），阶段推进由前置条件自动校验，防卡死强制推进
+- ReAct 范式 × PTES 七阶段状态机（目标确认→信息收集→漏洞扫描→漏洞分析→漏洞利用→后渗透→报告），阶段推进由前置条件自动校验，防卡死强制推进 [3]
 - 五类工具统一调度：nmap / nikto / dirsearch / sqlmap / metasploit
-- **参数解释器 + 输出解释器双层**：LLM 松散参数（URL 当 IP、布尔写成字符串）归一化为合法命令行（含 nmap 脚本白名单防幻觉）；nmap XML / dirsearch·nikto JSON / sqlmap 文本解析为结构化数据，非法参数与错误均生成「指名可调用工具的下一步」回喂 LLM [1]
+- **参数解释器 + 输出解释器双层**：LLM 松散参数（URL 当 IP、布尔写成字符串）归一化为合法命令行（含 nmap 脚本白名单防幻觉）；nmap XML / dirsearch·nikto JSON / sqlmap 文本解析为结构化数据，非法参数与错误均生成「指名可调用工具的下一步」回喂 LLM [1][7]
 - 上下文工程：分层摘要压缩长历史；结果合并时基于 14 类危险服务、13 类开发服务器、15 类敏感路径规则库自动推理漏洞条目，组件前缀去重
 - 多模型适配：DeepSeek / Kimi / 智谱 GLM / Claude / OpenAI，零依赖 LLM 内核直连
 - 可选 RAG：CVE / exploit 知识库增强决策
@@ -93,10 +93,10 @@ LLM 驱动的自动化渗透测试 Agent（红队）+ 提示注入攻击检测�
 **蓝队（blueteam/）——提示注入检测器**
 - 中英文模板数据集：9 类攻击模式 + 对抗性良性样本（翻译引用攻击语句、安全研究提问等）+ 工具输出良性类（领域适配）
 - 三级检测：L0 归一化/递归解码（Base64/Hex/ROT13/倒序/URL/全角/零宽）→ L1 规则 ⊕ 混合特征 LR → L2 级联（堆叠元学习器 + 字符 TextCNN）
-- 完整评测方法学：模板级不相交划分（防背题）、自助置信区间、FPR 约束安全阈值、5 种对抗变换鲁棒性实验
+- 完整评测方法学：模板级不相交划分（防背题）、自助置信区间、FPR 约束安全阈值、5 种对抗变换鲁棒性实验 [5]
 
 **融合层（fusion/ + security/context_guard.py）——上下文守卫与演习**
-- ContextGuard 嵌入 ReAct 循环 Act→Observe 检查点，对工具输出做字段级隔离
+- ContextGuard 嵌入 ReAct 循环 Act→Observe 检查点，对工具输出做字段级隔离 [6]
 - 内容门控：技术标识符（路径、版本号）不送检，只检「自然语言指令形态」文本；未检出内容再经 Spotlighting 分隔符包裹 [2]
 - 蜜罐感知：会话累计隔离 ≥2 次标记目标疑似蜜罐，写入审计日志
 - 攻防演习：陷阱靶场 + 确定性 MockLLM，量化守卫价值
@@ -210,7 +210,7 @@ LLM_MODEL=deepseek-chat
 
 自定义 OpenAI 兼容端点（如智谱 Coding Plan）：`.env` 中加 `LLM_BASE_URL=https://open.bigmodel.cn/api/coding/paas/v4`。
 
-**断点续跑**：进程被杀（kill -9 / 断电 / SIGTERM）后用 `--session-id <sid>` 恢复——事件日志（WAL，写前落账）+ 快照重建状态，上一动作无观察结果时注入系统续跑注记，已执行动作跨重启禁止重复；同一会话双开会被实例锁拒绝。
+**断点续跑**：进程被杀（kill -9 / 断电 / SIGTERM）后用 `--session-id <sid>` 恢复——事件日志（WAL，写前落账）+ 快照重建状态，上一动作无观察结果时注入系统续跑注记，已执行动作跨重启禁止重复；同一会话双开会被实例锁拒绝 [4]。
 
 **Web 控制台 + 远程审批**：
 
@@ -358,18 +358,89 @@ v0.2 已完成（工程化改造，借鉴 SPECTRE 实践，详见 [docs/optimiza
 
 ## 学术依据（References）
 
-本项目部分设计有公开文献依据（标注形如 [1][2] 见正文）：
+正文以 [n] 标注各设计点的文献依据；条目格式遵循 GB/T 7714-2015（arXiv 预印本按电子文献 [EB/OL] 著录），BibTeX 见文末折叠块。
 
-- [1] *MCP Error Messages Written for Developers Hurt the Most Capable Agents Most.* arXiv:2609.35381, 2026. —— 错误回喂文案规则：每条「下一步」指向 agent 可调用的工具（改写后恢复率 84-88%；反直觉发现：模型越强越忠实执行不可行动作）。
-- [2] *Defending Against Indirect Prompt Injection Attacks With Spotlighting.* arXiv:2403.14720, 2024. —— 工具输出 UNTRUSTED 分隔符包裹 + system prompt 声明（delimiting 变体；论文报告间接注入 ASR 50%→2%），作为 ContextGuard 检出隔离之外的第二层防御。
+**实施依据（本项目按文献方法实现）**
 
-以下工作与本项目既有设计互为印证（同类机制、独立结论）：
+[1] XU X, WU W. MCP error messages written for developers hurt the most capable agents most[EB/OL]. (2026-09-28)[2026-11-12]. https://arxiv.org/abs/2609.35381.
+　　→ 错误回喂文案规则：每条「下一步」必须指向 agent 可调用的工具；改写后任务恢复率 45%→84–88%，且模型越强、不可执行指引的代价越大。
 
-- Goal-Autopilot（arXiv:2606.11688）—— 前置条件门控 FSM（本项目 PTES 状态机 + 阶段推进校验）
-- TapeAgents（arXiv:2412.08445）—— 结构化日志磁带可恢复（本项目 WAL 事件日志/断点续跑）
-- Passing the Test You Trained On（arXiv:2610.03448）—— 检测器评测防背题与 FPR 约束（本项目模板级不相交划分）
-- Indirect Prompt Injections: Are Firewalls All You Need?（arXiv:2510.05244, NeurIPS 2025）—— agent-工具边界输出防火墙（本项目 ContextGuard 定位）
-- EnIGMA（arXiv:2409.16165, ICML 2025）—— 交互式安全工具封装（本项目参数/输出双层解释器）
+[2] HINES K, LOPEZ G, HALL M, et al. Defending against indirect prompt injection attacks with spotlighting[EB/OL]. (2024-03-20)[2026-11-12]. https://arxiv.org/abs/2403.14720.
+　　→ 工具输出 UNTRUSTED 分隔符包裹 + system prompt 声明（delimiting 变体）；论文报告间接注入攻击成功率 50%→2%。本项目将其部署于工具观察与状态快照两个不可信数据入口，作为 ContextGuard 检出隔离之外的第二层防御。
+
+**互为印证（独立工作得到与本项目既有机制一致的结论）**
+
+[3] DENG Y. Goal-Autopilot[EB/OL]. (2026-06-10)[2026-11-12]. https://arxiv.org/abs/2606.11688.
+　　→ 前置条件门控 FSM 将捏造率 33.7%→0.67%（对应本项目 PTES 状态机的阶段推进校验）。
+
+[4] BAHDANAU D, GONTIER N, HUANG G, et al. TapeAgents[EB/OL]. (2024-12-11)[2026-11-12]. https://arxiv.org/abs/2412.08445.
+　　→ 结构化日志磁带即可恢复/回放 agent 状态（对应本项目 WAL 事件日志与断点续跑）。
+
+[5] LIU Z. Passing the test you trained on: re-evaluating prompt-injection detectors for LLM agents[EB/OL]. (2026-10-02)[2026-11-12]. https://arxiv.org/abs/2610.03448.
+　　→ 检测器榜单排名不可跨基准迁移而 FPR 可迁移、训练分布匹配解释高分（对应本项目模板级不相交划分与 FPR 约束阈值）。
+
+[6] BHAGWATKAR R, KASA K, PURI A, et al. Indirect prompt injections: are firewalls all you need?[EB/OL]. (2025-10-06)[2026-11-12]. https://arxiv.org/abs/2510.05244.
+　　→ agent-工具边界的输出防火墙即可阻断几乎全部间接注入且不损效用（对应本项目 ContextGuard 的定位）。
+
+[7] ABRAMOVICH T, UDESHI M, SHAO M, et al. EnIGMA[C]//Proceedings of the 42nd International Conference on Machine Learning (ICML 2025). 2025. arXiv:2409.16165.
+　　→ 为交互式安全工具设计 LLM 工具接口层显著提升解题率（对应本项目参数/输出双层解释器）。
+
+<details>
+<summary><b>BibTeX（点击展开复制）</b></summary>
+
+```bibtex
+@article{xu2026mcperrors,
+  author  = {Xu, Xiaonan and Wu, Wenjing},
+  title   = {{MCP} Error Messages Written for Developers Hurt the Most Capable Agents Most},
+  journal = {arXiv preprint arXiv:2609.35381},
+  year    = {2026}
+}
+
+@article{hines2024spotlighting,
+  author  = {Hines, Keegan and Lopez, Gary and Hall, Matthew and Zarfati, Federico and Zunger, Yonatan and Kiciman, Emre},
+  title   = {Defending Against Indirect Prompt Injection Attacks With Spotlighting},
+  journal = {arXiv preprint arXiv:2403.14720},
+  year    = {2024}
+}
+
+@article{deng2026goalautopilot,
+  author  = {Deng, Youwang},
+  title   = {Goal-Autopilot},
+  journal = {arXiv preprint arXiv:2606.11688},
+  year    = {2026}
+}
+
+@article{bahdanau2024tapeagents,
+  author  = {Bahdanau, Dzmitry and Gontier, Nicolas and Huang, Gabriel and Kamalloo, Ehsan and Pardinas, Rafael and Pich{'e}, Alex and Scholak, Torsten and Shliazhko, Oleh and Tremblay, Jordan Prince and Ghanem, Karam and Parikh, Soham and Tiwari, Mitul and Vohra, Quaizar},
+  title   = {TapeAgents},
+  journal = {arXiv preprint arXiv:2412.08445},
+  year    = {2024}
+}
+
+@article{liu2026passingthetest,
+  author  = {Liu, Zhuowen},
+  title   = {Passing the Test You Trained On: Re-evaluating Prompt-Injection Detectors for {LLM} Agents},
+  journal = {arXiv preprint arXiv:2610.03448},
+  year    = {2026}
+}
+
+@article{bhagwatkar2025firewalls,
+  author  = {Bhagwatkar, Rishika and Kasa, Kevin and Puri, Abhay and Huang, Gabriel and Rish, Irina and Taylor, Graham W. and Dvijotham, Krishnamurthy Dj and Lacoste, Alexandre},
+  title   = {Indirect Prompt Injections: Are Firewalls All You Need?},
+  journal = {arXiv preprint arXiv:2510.05244},
+  year    = {2025}
+}
+
+@inproceedings{abramovich2025enigma,
+  author    = {Abramovich, Talor and Udeshi, Meet and Shao, Minghao and Lieret, Kilian and Xi, Haoran and Milner, Kimberly and Jancheska, Sofija and Yang, John and Jimenez, Carlos E. and Khorrami, Farshad and Krishnamurthy, Prashanth and Dolan-Gavitt, Brendan and Shafique, Muhammad and Narasimhan, Karthik and Karri, Ramesh and Press, Ofir},
+  title     = {{EnIGMA}},
+  booktitle = {Proceedings of the 42nd International Conference on Machine Learning (ICML)},
+  year      = {2025},
+  note      = {arXiv:2409.16165}
+}
+```
+
+</details>
 
 ## 致谢与声明
 
