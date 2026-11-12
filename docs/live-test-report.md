@@ -68,3 +68,24 @@ docker exec -d pentest-agent sh -c 'cd /app && PENTESTAGENT_TOKEN=<token> \
 ## 结论
 
 P0–P2 十九项改造在真实 LLM + 真实工具 + 真实靶场上全链路可用；实测反哺修复 2 个真实缺陷（L1/L2）。agent 具备了在无 Kali 的普通 Linux 上以容器形态执行授权渗透测试的能力。
+
+## 附：Juice Shop（★★★）实战轮（2026-11-12，v0.3 论文驱动优化后）
+
+环境：同上，靶场换为 OWASP Juice Shop（172.20.0.13:3000，现代 SPA/Node）。
+会话 `20261112-131737-web`，22.6 分钟 / 18 迭代 / 自动 finish。
+
+| 指标 | 结果 |
+|---|---|
+| 发现漏洞 | **3**：critical（GET 参数 `q` boolean-based blind + SQLite time-based blind SQL 注入）、low（API 文档暴露）、info（robots.txt 路径泄露） |
+| 报告 | 双语 Markdown + JSON，含注入证据原文与修复优先级 |
+| parallel 批 | nikto+dirsearch（T1592 组合，KB 建议被采纳） |
+
+**本轮验证的 v0.3 优化（论文驱动 [1][2][8][9]）**：
+1. 知识库全阶段注入 [8][9]：开局即 host_discovery→service（T1595 路径）；扫描阶段 PARALLEL nikto+dirsearch；利用阶段 T1190 阶梯——先 POST `/rest/user/login`（换 JSON data 格式），再 GET `/rest/product/search?q=`，level 3→5 递进最终检出 critical 注入
+2. Spotlighting [2]：14/14 条工具观察文本全部 UNTRUSTED 包裹（4 条 text 观察无需包裹）
+3. 超时可执行文案 [1]：sqlmap 300s 超时（seq 34）→ 提示「缩小参数范围重发」→ LLM 重试成功（seq 36）——错误文案实效闭环
+4. 对 ★★★ 靶场的观察：LLM 能从 hostname 识别出 Juice Shop 并用领域知识定向 wordlist（rest/ftp/admin/metrics/encryptionkeys）
+
+**本轮暴露的改进项（后续待办）**：
+- sqlmap 对同一端点 5 连发（尾部参数微调绕过 (tool, params) 哈希的重复检测）——需要语义级重复检测：同 tool + 同 URL/目标即视为重复并提示换端点
+- Juice Shop 大量漏洞属业务逻辑/前端绕过类（现有五工具覆盖面外），KB 可扩展 REST API 滥用条目
