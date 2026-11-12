@@ -916,8 +916,8 @@ def dot_env():
 def robots():
     return Response(
         "User-agent: *\nDisallow: /admin\nDisallow: /backup\n"
-        "Disallow: /config\nDisallow: /.env
-Disallow: /honeytoken-9f8e7d.txt\nDisallow: /api/\n",
+        "Disallow: /config\nDisallow: /.env\n"
+        "Disallow: /honeytoken-9f8e7d.txt\nDisallow: /api/\n",
         mimetype="text/plain"
     )
 
