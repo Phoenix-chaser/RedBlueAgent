@@ -19,6 +19,7 @@ This project evolved from the undergraduate thesis project [PentestAgent](https:
 
 - [Motivation](#motivation)
 - [System Architecture](#system-architecture)
+- [Console Tour](#console-tour)
 - [Attack-Defense Drill Results](#attack-defense-drill-results)
 - [Blue Team Detector Performance](#blue-team-detector-performance)
 - [Installation](#installation)
@@ -106,6 +107,18 @@ The inbound threat is real and specific: **the target of a pentest is by nature 
 - Honeypot awareness: ≥2 quarantines in a session flag the target as a suspected honeypot, written to the audit log
 - Attack-defense drill: trap range + deterministic MockLLM to quantify guard value
 
+## Console Tour
+
+Web console (`scripts/serve.py`, bearer-token auth): live SSE event stream, PTES stage progress, severity-split vulnerability stats, and dangerous-operation approvals.
+
+**Guide state** — three-step onboarding plus a target-range cheat sheet right after deployment:
+
+![Console guide state](docs/images/console-guide.png)
+
+**Live session** — left: sessions with status and vuln counts; center: stage progress + stat cards + live event stream (`PARALLEL` marks concurrent batches); right: pending approvals:
+
+![Console live session](docs/images/console-session.png)
+
 ## Attack-Defense Drill Results
 
 **Setup**: 8 scenarios (no trap / 6 single-trap types / mixed three traps) × guard on/off = 16 full ReAct pipeline runs. Parsers, context merging, stage state machine, and the security boundary are all real modules; the LLM is a deterministic mock (worst-case obedience assumption: any un-quarantined injection payload in context is obeyed with probability 1). Trap vectors are embedded in nikto finding descriptions and dirsearch paths—two fields verified to flow verbatim into the LLM observation text.
@@ -133,6 +146,8 @@ The guard's L0+L1 configuration on the template-disjoint test set (487 samples, 
 | Hybrid-feature LR (adversarially augmented) | 0.981 | 0.822 | 0.088 | 0 |
 | **L0 + defense-in-depth (used by the guard)** | **0.998** | **0.969** | **0.013** | **0** |
 | Full cascade (L1+L2, optional) | 0.990 | 0.965 | 0.013 | 0 |
+
+![Blue team detector ROC curves](blueteam/results/roc_curves.png)
 
 Full evaluation (1,000× bootstrap CIs, robustness under 5 adversarial transformations, calibration analysis) in [blueteam/README.md](blueteam/README.md); reproduce with `cd blueteam && python3 -m src.evaluate`.
 
