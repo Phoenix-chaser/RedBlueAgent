@@ -205,6 +205,31 @@ class SessionLock:
 # -- replay -----------------------------------------------------------------
 
 
+def collect_action_hashes(events: list[dict]) -> set[int]:
+    """Hashes of EVERY executed action (whole log, not just post-snapshot).
+
+    The no-repeat guard must survive resume even when the snapshot boundary
+    sits before actions whose hashes were never persisted anywhere else —
+    found in live test M2 (snapshot at seq=7 lost the hashes of seq<=7 actions).
+    """
+    hashes: set[int] = set()
+    for e in events:
+        if e.get("t") != "action":
+            continue
+        a = (e.get("d") or {}).get("action") or {}
+        tool = a.get("tool")
+        if tool:
+            hashes.add(
+                hash(
+                    (
+                        tool,
+                        json.dumps(a.get("params") or {}, sort_keys=True, ensure_ascii=False),
+                    )
+                )
+            )
+    return hashes
+
+
 def replay_into_state(
     state: PentestState,
     events: list[dict],

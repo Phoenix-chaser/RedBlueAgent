@@ -13,16 +13,20 @@ class DirsearchParser(BaseOutputParser):
         if not stdout.strip():
             return result
 
-        # Try JSON parsing first (dirsearch --format json)
+        # Try JSON parsing first (dirsearch report file / --format json)
         try:
             data = json.loads(stdout)
             # dirsearch JSON: {"results": [{"status": 200, "path": "/admin", ...}]}
+            # 0.5+ 字段为 url/contentLength（驼峰），旧版 path/content-length
             if isinstance(data, dict) and "results" in data:
                 for item in data["results"]:
+                    path = item.get("path") or ""
+                    if not path and item.get("url"):
+                        path = urlparse(item["url"]).path.rstrip("/") or "/"
                     result["paths"].append({
-                        "path": item.get("path", ""),
+                        "path": path,
                         "status": item.get("status", 0),
-                        "size": item.get("content-length", 0),
+                        "size": item.get("contentLength", item.get("content-length", 0)),
                         "redirect": item.get("redirect", None),
                     })
             elif isinstance(data, list):

@@ -25,7 +25,12 @@ from security.approval_gate import DangerousOperationApprovalGate
 from security.boundary import SecurityBoundaryController
 from security.scope_validator import TargetScopeValidator
 from agent.react_loop import ReActLoop
-from agent.session_log import EventLog, SessionLock, replay_into_state
+from agent.session_log import (
+    EventLog,
+    SessionLock,
+    collect_action_hashes,
+    replay_into_state,
+)
 
 
 class PentestAgent:
@@ -62,10 +67,14 @@ class PentestAgent:
         model = os.getenv("LLM_MODEL") or llm_cfg.get("model") or None
         max_tokens = int(os.getenv("LLM_MAX_TOKENS", llm_cfg.get("max_tokens", 8192)))
         temperature = float(llm_cfg.get("temperature", 0.1))
+        # base_url 覆盖：env LLM_BASE_URL > config llm.base_url > provider 默认
+        # （例：智谱 Coding Plan 专用端点 https://open.bigmodel.cn/api/coding/paas/v4）
+        base_url = os.getenv("LLM_BASE_URL") or llm_cfg.get("base_url") or None
 
         self.llm = create_llm(
             provider=provider,
             model=model or None,
+            base_url=base_url,
             max_tokens=max_tokens,
             temperature=temperature,
         )
@@ -221,7 +230,10 @@ class PentestAgent:
                 f"会话 {session_id} 无可恢复数据（无快照且无 start 事件）: {session_dir}")
 
         tail = [e for e in events if int(e.get("seq", 0)) > seq]
-        state, interrupted, action_hashes = replay_into_state(state, tail, self.context_mgr)
+        state, interrupted, _ = replay_into_state(state, tail, self.context_mgr)
+        # 重复动作哈希必须覆盖全量历史（含快照之前的动作），否则恢复后
+        # 旧动作可被原样重跑（live test M2 发现）
+        action_hashes = collect_action_hashes(events)
         console.print(
             f"[cyan]会话恢复: 重放 {len(tail)} 个事件"
             f"（快照 seq={seq}，日志 seq={log.seq}，阶段={state.current_stage.value}）[/cyan]")

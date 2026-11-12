@@ -67,7 +67,9 @@ def test_dirsearch_adds_scheme_and_json_output():
     assert "php,html" in cmd                  # leading dot stripped, list joined
     assert cmd[cmd.index("-t") + 1] == "40"
     assert "-r" in cmd                        # recursive
-    assert cmd[-3:] == ["--format", "json", "-o", "-"][-3:]  # JSON to stdout
+    # JSON report flags moved to DirsearchTool.run (0.5 compat); interpreter
+    # no longer appends any output flags
+    assert "--format" not in cmd and "-o" not in cmd
 
 
 # --- nikto ------------------------------------------------------------------

@@ -236,3 +236,23 @@ def test_full_wal_cycle_snapshot_then_crash_then_resume(tmp_path):
     assert interrupted is not None
     assert interrupted["action"]["tool"] == "dirsearch"
     assert hashes  # nmap + dirsearch hashes survive for the no-repeat guard
+
+
+def test_collect_action_hashes_covers_pre_snapshot_history():
+    """Live-test M2 finding: hashes must come from the WHOLE log, else actions
+    executed before the last snapshot could be re-run after resume."""
+    from agent.session_log import collect_action_hashes
+    events = [
+        {"seq": 1, "t": "start", "d": {"target": "t", "scope": ["t"]}},
+        {"seq": 2, "t": "action", "d": {"thought": "a", "action": {
+            "type": "tool", "tool": "nmap", "params": {"target": "192.168.1.100"}}}},
+        {"seq": 3, "t": "observation", "d": {
+            "iteration": 1, "thought": "a",
+            "action": {"type": "tool", "tool": "nmap", "params": {"target": "192.168.1.100"}},
+            "kind": "text", "payload": "ok"}},
+        # snapshot boundary here (seq=3); crash after seq=4's action
+        {"seq": 4, "t": "action", "d": {"thought": "b", "action": {
+            "type": "tool", "tool": "nikto", "params": {"target": "http://192.168.1.100"}}}},
+    ]
+    hashes = collect_action_hashes(events)
+    assert len(hashes) == 2  # nmap (pre-snapshot) + nikto (post-snapshot)

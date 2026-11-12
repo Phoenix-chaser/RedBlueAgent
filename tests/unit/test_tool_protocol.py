@@ -132,3 +132,36 @@ def test_sqlmap_named_extremes():
         "url": "http://192.168.1.100/?id=1", "level": "highest", "risk": "max"})
     assert cmd[cmd.index("--level") + 1] == "5"
     assert cmd[cmd.index("--risk") + 1] == "3"
+
+
+# -- dirsearch 0.5 compatibility (found in live test M1) ----------------------
+
+
+def test_dirsearch_params_no_legacy_format_flag():
+    """0.5 removed --format; output flags now live in DirsearchTool.run."""
+    from modules.tool_invocation.params.dirsearch_params import DirsearchParamInterpreter
+    cmd = DirsearchParamInterpreter().build({"url": "http://192.168.1.100:5000"})
+    assert "--format" not in cmd and "-O" not in cmd and "-o" not in cmd
+
+
+def test_dirsearch_parser_handles_05_fields():
+    """0.5 report uses url/contentLength (camelCase) instead of path/content-length."""
+    import json as _json
+    from modules.tool_invocation.parsers.dirsearch_parser import DirsearchParser
+    report = _json.dumps({"results": [
+        {"url": "http://t:5000/admin", "status": 200,
+         "contentLength": 42, "contentType": "text/html", "redirect": ""},
+    ]})
+    parsed = DirsearchParser().parse(report)
+    assert parsed["paths"] == [{"path": "/admin", "status": 200, "size": 42, "redirect": ""}]
+
+
+def test_dirsearch_parser_legacy_fields_still_work():
+    import json as _json
+    from modules.tool_invocation.parsers.dirsearch_parser import DirsearchParser
+    report = _json.dumps({"results": [
+        {"path": "/backup", "status": 403, "content-length": 7},
+    ]})
+    parsed = DirsearchParser().parse(report)
+    assert parsed["paths"][0]["path"] == "/backup"
+    assert parsed["paths"][0]["size"] == 7

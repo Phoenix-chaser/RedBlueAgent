@@ -39,8 +39,9 @@ class DirsearchParamInterpreter:
         if as_bool(params.get("recursive"), default=False):
             cmd.append("-r")
 
-        # Stream structured results to stdout for the parser.
-        cmd += ["--format", "json", "-o", "-"]
+        # 输出参数（JSON report）由 DirsearchTool.run 管理：dirsearch 0.5 的
+        # 参数是 -O/--output-formats（旧 --format 已移除），且 report 落
+        # 临时文件后读回喂 parser（-o /dev/stdout 在 0.5 上会挂死）。
         return cmd
 
     @staticmethod
