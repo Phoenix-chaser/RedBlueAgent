@@ -150,6 +150,14 @@ The guard's L0+L1 configuration on the template-disjoint test set (487 samples, 
 
 ![Blue team detector ROC curves](blueteam/results/roc_curves.png)
 
+**Differential-replay evaluation on real tool outputs (deployment-domain FPR, [5])**: benchmarking on this agent's own archived tool outputs (benign by construction) exposed a blind spot invisible to template evaluation — sqlmap log lines *discussing* injection techniques (e.g. `parameter 'q' appears to be injectable`) hit 14.1% FPR on the baseline model (exceeding the 10% training constraint, reproducing the paper's "leaderboard FPR doesn't transfer" finding). After domain-adaptive retraining with the training half, FPR on the held-out half (880 samples) drops **12.05% → 0.00%**. Reproduce:
+
+```bash
+cd blueteam && python3 -m src.toolout_bench --sessions-dir ../data/sessions --split-half  # split halves
+python3 -m src.train        # domain-adaptive retrain (auto-includes extra_benign.jsonl)
+python3 -m src.toolout_bench --sessions-dir ../data/sessions        # leak-free re-evaluation
+```
+
 Full evaluation (1,000× bootstrap CIs, robustness under 5 adversarial transformations, calibration analysis) in [blueteam/README.md](blueteam/README.md); reproduce with `cd blueteam && python3 -m src.evaluate`.
 
 ## Installation

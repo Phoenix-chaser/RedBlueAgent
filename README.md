@@ -144,6 +144,14 @@ Web 控制台（`scripts/serve.py`，Bearer Token 认证）：SSE 实时事件�
 
 ![蓝队检测器 ROC 曲线](blueteam/results/roc_curves.png)
 
+**真实工具输出差分重放评测（部署域 FPR，[5]）**：用本 Agent 实测会话的工具输出存档（构造即良性）评测，暴露了模板评测看不见的盲区——sqlmap 日志行「谈论注入技术」（如 `parameter 'q' appears to be injectable`）在基线模型上 FPR 14.1%（超出训练时 10% 约束，复现文献「榜单 FPR 不可迁移」论点）。将训练半集并入领域适配重训后，在同一防泄漏评测半集（880 条）上 **FPR 12.05% → 0.00%**。复现：
+
+```bash
+cd blueteam && python3 -m src.toolout_bench --sessions-dir ../data/sessions --split-half  # 分半
+python3 -m src.train        # 领域适配重训（自动并入 extra_benign.jsonl）
+python3 -m src.toolout_bench --sessions-dir ../data/sessions        # 防泄漏口径复评
+```
+
 完整评测（含 1,000 次自助置信区间、5 种对抗变换鲁棒性、校准分析）见 [blueteam/README.md](blueteam/README.md)，`cd blueteam && python3 -m src.evaluate` 可复现。
 
 ## 安装

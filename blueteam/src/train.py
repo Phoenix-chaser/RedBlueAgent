@@ -73,6 +73,14 @@ def main() -> None:
     train = load_jsonl(ROOT / "data" / "train.jsonl")
     val = load_jsonl(ROOT / "data" / "val.jsonl")
 
+    # 领域适配（差分重放 [5]）：真实工具输出良性样本（构造即良性）并入
+    # 训练良性侧——只允许来自训练半集（--split-half），评测半集保持纯净
+    extra_path = ROOT / "data" / "extra_benign.jsonl"
+    if extra_path.exists():
+        extra = [json.loads(l) for l in extra_path.read_text(encoding="utf-8").splitlines() if l.strip()]
+        train = train + [{"text": s["text"], "label": 0} for s in extra]
+        print(f"[domain-adapt] 并入真实工具输出良性样本 {len(extra)} 条（source=toolout_bench）")
+
     texts = [s["text"] for s in train]
     labels = np.array([s["label"] for s in train])
     aug = augment(train)
