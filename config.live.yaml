@@ -18,6 +18,8 @@ agent:
 security:
   require_approval_for_exploits: true
   approval_policy: ""
+  taint_policy: block
+  honeytokens: ["honeytoken-"]
 
 rag:
   vector_store_dir: data/knowledge_base/vector_store
