@@ -84,6 +84,7 @@ LLM 驱动的自动化渗透测试 Agent（红队）+ 提示注入攻击检测�
 
 **红队（主目录）——自动化渗透引擎**
 - ReAct 范式 × PTES 七阶段状态机（目标确认→信息收集→漏洞扫描→漏洞分析→漏洞利用→后渗透→报告），阶段推进由前置条件自动校验，防卡死强制推进 [3]
+- 内置 ATT&CK 式知识库（阶段+上下文条件检索）全阶段驱动攻击树候选，成败回喂按「低层参数错误退一步修正 / 高层方向失败换技术」两级回退 [8][9]
 - 五类工具统一调度：nmap / nikto / dirsearch / sqlmap / metasploit
 - **参数解释器 + 输出解释器双层**：LLM 松散参数（URL 当 IP、布尔写成字符串）归一化为合法命令行（含 nmap 脚本白名单防幻觉）；nmap XML / dirsearch·nikto JSON / sqlmap 文本解析为结构化数据，非法参数与错误均生成「指名可调用工具的下一步」回喂 LLM [1][7]
 - 上下文工程：分层摘要压缩长历史；结果合并时基于 14 类危险服务、13 类开发服务器、15 类敏感路径规则库自动推理漏洞条目，组件前缀去重
@@ -385,6 +386,12 @@ v0.2 已完成（工程化改造，借鉴 SPECTRE 实践，详见 [docs/optimiza
 [7] ABRAMOVICH T, UDESHI M, SHAO M, et al. EnIGMA[C]//Proceedings of the 42nd International Conference on Machine Learning (ICML 2025). 2025. arXiv:2409.16165.
 　　→ 为交互式安全工具设计 LLM 工具接口层显著提升解题率（对应本项目参数/输出双层解释器）。
 
+[8] NAKANO R, FAYYAZI T, YANG L, et al. Guided reasoning in LLM-driven penetration testing using structured attack trees[EB/OL]. (2025-09-09)[2026-11-12]. https://arxiv.org/abs/2509.07939.
+　　→ 确定性任务树约束 LLM 推理：Llama-3-8B/Gemini-1.5 子任务完成率提升 4-5 倍、查询开销下降 86-206%（对应本项目内置知识库驱动的全阶段攻击树候选注入）。
+
+[9] DAI H, LI Y, YAN J, et al. RefPentester: knowledge-informed self-reflective penetration testing[EB/OL]. (2025-05-11)[2026-11-12]. https://arxiv.org/abs/2505.07089.
+　　→ 按「阶段+上下文」条件检索 ATT&CK/OTG 知识注入双层提示；失败按层级两级回退（低层错退一步、高层错退两步重检索）（对应本项目 attack_kb 条件检索与失败感知回退）。
+
 <details>
 <summary><b>BibTeX（点击展开复制）</b></summary>
 
@@ -437,6 +444,20 @@ v0.2 已完成（工程化改造，借鉴 SPECTRE 实践，详见 [docs/optimiza
   booktitle = {Proceedings of the 42nd International Conference on Machine Learning (ICML)},
   year      = {2025},
   note      = {arXiv:2409.16165}
+}
+
+@article{nakano2025guidedreasoning,
+  author  = {Nakano, Russell and Fayyazi, Tara and Yang, Luxi and Zuzak, Magnus},
+  title   = {Guided Reasoning in {LLM}-Driven Penetration Testing Using Structured Attack Trees},
+  journal = {arXiv preprint arXiv:2509.07939},
+  year    = {2025}
+}
+
+@article{dai2025refpentester,
+  author  = {Dai, Hanzheng and Li, Yuanliang and Yan, Jun and Zhang, Zhibo},
+  title   = {RefPentester: Knowledge-Informed Self-Reflective Penetration Testing},
+  journal = {arXiv preprint arXiv:2505.07089},
+  year    = {2025}
 }
 ```
 

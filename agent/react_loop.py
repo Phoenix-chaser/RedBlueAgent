@@ -19,6 +19,7 @@ from modules.context_management.state_schema import (
 )
 from modules.context_management.summarizer import HierarchicalSummarizer
 from modules.task_planning.attack_tree import AttackNode, AttackTree
+from modules.task_planning.attack_kb import suggest_actions
 from modules.task_planning.stage_manager import StageManager
 from modules.tool_invocation.invoker import ToolInvoker
 from security.boundary import SecurityBoundaryController
@@ -85,8 +86,27 @@ class ReActLoop:
     # -----------------------------------------------------------------------
 
     def _sync_attack_tree(self, state: PentestState) -> None:
-        """把未利用漏洞播种为根节点（按严重度给优先级），幂等。"""
+        """播种攻击树候选，幂等。两个来源：
+        1. 内置 ATT&CK 知识库（attack_kb [8][9]）——按「阶段+上下文条件」
+           检索可执行动作，全阶段常开（零依赖的知识注入）；
+        2. 未利用漏洞（利用/后渗透阶段）——按严重度给优先级。
+        """
         existing = {n.hypothesis for n in self.attack_tree.get_all_nodes()}
+
+        # 来源 1：知识库候选（hypothesis=technique 描述，tool 非空可精确归因）
+        for sug in suggest_actions(state, self._action_hashes, limit=3):
+            if sug["hypothesis"] in existing:
+                continue
+            self.attack_tree.add_root_node(AttackNode(
+                hypothesis=sug["hypothesis"],
+                stage=state.current_stage.value,
+                tool=sug["tool"],
+                suggested_params=sug["params"],
+                priority=0.55,  # 知识库候选低于已确认漏洞、高于探索
+            ))
+            existing.add(sug["hypothesis"])
+
+        # 来源 2：未利用漏洞（利用/后渗透阶段价值最高）
         for vuln in state.vulnerabilities:
             if vuln.exploited or vuln.title in existing:
                 continue
@@ -99,7 +119,13 @@ class ReActLoop:
             ))
 
     def _feedback_attack_tree(self, action: ActionDecision, observation) -> None:
-        """候选动作成败回喂：成功标记 SUCCEEDED，失败标记 FAILED 并回溯。"""
+        """候选动作成败回喂——失败类型感知的两级回退（RefPentester [9]）：
+
+        - 低层失败（参数/用法错误，命令未真正执行）：候选保持 PENDING，
+          仅依赖 ① 已改造的可执行错误文案让 LLM 修正参数重试（退一步）；
+        - 高层失败（技术不适用，工具执行了但未成功）：标记 FAILED 并
+          backtrack 换下一候选（退两步）。
+        """
         cand = self._current_candidate
         if cand is None or action.type != "tool":
             return
@@ -112,7 +138,12 @@ class ReActLoop:
             self.attack_tree.mark_node(
                 cand.node_id, AttackNodeStatus.SUCCEEDED,
                 evidence=(observation.error_message or "")[:200])
-        else:
+            return
+        # 参数类错误的启发式：ParamError 文案以「requires…」描述期望格式，
+        # 且命令未真正下发生效（command 为空或仅工具名）
+        err = observation.error_message or ""
+        low_level = "requires" in err and len(observation.command.split()) <= 1
+        if not low_level:
             self.attack_tree.mark_node(cand.node_id, AttackNodeStatus.FAILED)
             self.attack_tree.backtrack(cand.node_id)
 
@@ -451,19 +482,22 @@ class ReActLoop:
         stage_guidance = get_stage_prompt(state.current_stage.value)
         parts.append(stage_guidance)
 
-        # Attack plan (advisory): 利用/后渗透阶段注入 UCB1 排序候选。
+        # Attack plan (advisory, KB-driven [8][9]): 全阶段注入 UCB1 排序候选
+        # （信息收集/扫描阶段来自内置 ATT&CK 知识库；利用阶段叠加漏洞树）。
         # 建议制——LLM 保留自主性，成败结果回喂驱动回溯。
-        if state.current_stage in (PentestStage.VULNERABILITY_EXPLOITATION,
-                                   PentestStage.POST_EXPLOITATION):
-            self._sync_attack_tree(state)
-            if self.attack_tree.pending_count() > 0:
-                candidate = self.attack_tree.get_next_candidate()
-                if candidate is not None:
-                    self._current_candidate = candidate
-                    parts.append(
-                        "## Attack Plan (advisory, UCB1-ordered)\n"
-                        + self.attack_tree.to_prompt_summary()
-                        + f"\n建议优先尝试: {candidate.hypothesis}")
+        self._sync_attack_tree(state)
+        if self.attack_tree.pending_count() > 0:
+            candidate = self.attack_tree.get_next_candidate()
+            if candidate is not None:
+                self._current_candidate = candidate
+                params_hint = ""
+                if candidate.tool:
+                    params_hint = f"\n建议动作: {candidate.tool} {candidate.suggested_params}"
+                parts.append(
+                    "## Attack Plan (advisory, UCB1-ordered)\n"
+                    + self.attack_tree.to_prompt_summary()
+                    + f"\n建议优先尝试: {candidate.hypothesis}"
+                    + params_hint)
 
         # RAG context
         if self.rag_kb:

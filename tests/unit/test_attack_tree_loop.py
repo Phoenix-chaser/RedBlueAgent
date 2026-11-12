@@ -152,24 +152,31 @@ def test_failure_marks_node_and_backtracks_to_sibling():
     assert loop._current_candidate.hypothesis == "Backup File Exposed"
 
 
-def test_exploited_vulns_not_seeded():
-    v = vuln("Already Done", Severity.HIGH)
-    v.exploited = True
-    state = make_exploit_state(v)
-
-    llm = ScriptedLLM([FINISH_XML])
-    loop = make_loop(llm, FixedInvoker(success=True))
-    loop.run(state)
-    assert loop.attack_tree.pending_count() == 0
-
-
-def test_no_attack_plan_outside_exploit_stages():
+def test_kb_drives_attack_plan_in_gathering_stage():
+    """v0.3（[8][9]）：Attack Plan 全阶段注入——信息收集阶段由内置
+    ATT&CK 知识库驱动，prompt 应含战术/技术标注与可执行动作建议。"""
     state = PentestState(session_id="atk2", target="192.168.1.100",
                          scope=["192.168.1.100"])
     state.current_stage = PentestStage.INFORMATION_GATHERING
-    state.add_vulnerability(vuln("SQL Injection in /login", Severity.HIGH))
 
     llm = ScriptedLLM([FINISH_XML])
     loop = make_loop(llm, FixedInvoker(success=True))
     loop.run(state)
-    assert "Attack Plan" not in llm.prompts[0]
+    assert "Attack Plan" in llm.prompts[0]
+    assert "T1595" in llm.prompts[0]               # ATT&CK 技术标注
+    assert "nmap" in llm.prompts[0]                # 可执行动作建议
+
+
+def test_exploited_vulns_not_seeded_but_kb_may_be():
+    """漏洞全部已利用时不播种漏洞树；知识库候选（如后渗透数据枚举）
+    仍可存在——两者来源独立。"""
+    v = vuln("Already Done", Severity.HIGH)
+    v.exploited = True
+    state = make_exploit_state(v)
+    state.current_stage = PentestStage.POST_EXPLOITATION
+
+    llm = ScriptedLLM([FINISH_XML])
+    loop = make_loop(llm, FixedInvoker(success=True))
+    loop.run(state)
+    nodes = {n.hypothesis for n in loop.attack_tree.get_all_nodes()}
+    assert "Already Done" not in nodes             # 漏洞不播种

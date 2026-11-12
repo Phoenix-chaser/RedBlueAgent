@@ -90,6 +90,7 @@ The inbound threat is real and specific: **the target of a pentest is by nature 
 
 **Red Team (repo root) — automated pentest engine**
 - ReAct paradigm × PTES 7-stage state machine (target confirmation → information gathering → vulnerability scanning → vulnerability analysis → exploitation → post-exploitation → report); stage advance gated by preconditions, with force-advance anti-stall [3]
+- Built-in ATT&CK-style knowledge base (stage + context-conditional retrieval) drives attack-tree candidates across all stages, with failure-aware two-level backtracking (low-level param errors step back and retry; high-level failures switch technique) [8][9]
 - Five tools under unified dispatch: nmap / nikto / dirsearch / sqlmap / metasploit
 - **Dual-layer tool interpreters**: loose LLM parameters (URL-as-IP, booleans-as-strings) are normalized into legal command lines (with an nmap script whitelist against hallucination); nmap XML / dirsearch·nikto JSON / sqlmap text are parsed into structured data; illegal parameters and errors produce "next steps that name a callable tool" fed back to the LLM [1][7]
 - Context engineering: hierarchical summarization for long histories; result merging auto-infers vulnerability entries via rule bases (14 dangerous services, 13 dev-server signatures, 15 sensitive paths) with component-prefix dedup
@@ -381,6 +382,9 @@ Inline markers [n] in the text point to the entries below (arXiv preprints liste
 [6] R. Bhagwatkar, K. Kasa, A. Puri, et al., "Indirect Prompt Injections: Are Firewalls All You Need?," arXiv:2510.05244, 2025. — agent-tool boundary output firewalls block nearly all indirect injection at no utility cost (ContextGuard's positioning).
 [7] T. Abramovich, M. Udeshi, M. Shao, et al., "EnIGMA," in Proc. ICML 2025, arXiv:2409.16165. — LLM tool-interface layers for interactive security tools materially improve solve rates (our dual param/output interpreters).
 
+[8] R. Nakano, T. Fayyazi, L. Yang, et al., "Guided Reasoning in LLM-Driven Penetration Testing Using Structured Attack Trees," arXiv:2509.07939, 2025. — deterministic task trees lift small-model subtask completion 4–5× with far fewer queries (our KB-driven all-stage attack-plan injection).
+[9] H. Dai, Y. Li, J. Yan, et al., "RefPentester: Knowledge-Informed Self-Reflective Penetration Testing," arXiv:2505.07089, 2025. — stage+context conditional retrieval of ATT&CK/OTG knowledge and two-level backtracking on failure (our attack_kb retrieval and failure-aware backoff).
+
 <details>
 <summary><b>BibTeX (click to expand)</b></summary>
 
@@ -433,6 +437,20 @@ Inline markers [n] in the text point to the entries below (arXiv preprints liste
   booktitle = {Proceedings of the 42nd International Conference on Machine Learning (ICML)},
   year      = {2025},
   note      = {arXiv:2409.16165}
+}
+
+@article{nakano2025guidedreasoning,
+  author  = {Nakano, Russell and Fayyazi, Tara and Yang, Luxi and Zuzak, Magnus},
+  title   = {Guided Reasoning in {LLM}-Driven Penetration Testing Using Structured Attack Trees},
+  journal = {arXiv preprint arXiv:2509.07939},
+  year    = {2025}
+}
+
+@article{dai2025refpentester,
+  author  = {Dai, Hanzheng and Li, Yuanliang and Yan, Jun and Zhang, Zhibo},
+  title   = {RefPentester: Knowledge-Informed Self-Reflective Penetration Testing},
+  journal = {arXiv preprint arXiv:2505.07089},
+  year    = {2025}
 }
 ```
 
