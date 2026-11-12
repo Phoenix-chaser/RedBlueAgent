@@ -2,134 +2,437 @@
 <html lang="zh">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PentestAgent Console</title>
 <style>
-  body { font-family: system-ui, sans-serif; margin: 0; background: #0f1117; color: #d7dce5; }
-  header { padding: 14px 20px; background: #161a23; border-bottom: 1px solid #2a2f3d; }
-  header h1 { font-size: 18px; margin: 0; }
-  main { display: grid; grid-template-columns: 260px 1fr 300px; gap: 12px; padding: 14px; height: calc(100vh - 64px); box-sizing: border-box; }
-  section { background: #161a23; border: 1px solid #2a2f3d; border-radius: 8px; padding: 12px; overflow-y: auto; }
-  h2 { font-size: 13px; color: #8b93a7; margin: 0 0 10px; text-transform: uppercase; }
-  .sid { padding: 8px 10px; border-radius: 6px; cursor: pointer; margin-bottom: 6px; background: #1d2230; }
-  .sid:hover, .sid.active { background: #274060; }
-  #new-session input { width: 100%; box-sizing: border-box; padding: 6px; margin-bottom: 6px; background: #0f1117; color: #d7dce5; border: 1px solid #2a2f3d; border-radius: 4px; }
-  button { background: #2f6fed; color: #fff; border: 0; border-radius: 4px; padding: 6px 12px; cursor: pointer; }
-  button.deny { background: #b3413d; }
-  #events { font-family: ui-monospace, monospace; font-size: 12px; }
-  .ev { padding: 3px 6px; border-left: 3px solid #2f6fed; margin-bottom: 4px; background: #1d2230; border-radius: 0 4px 4px 0; white-space: pre-wrap; word-break: break-all; }
-  .ev.action { border-color: #d29922; } .ev.observation { border-color: #3faa5a; }
-  .ev.llm_error { border-color: #b3413d; } .ev.finish { border-color: #9d6ff0; }
-  .approval { background: #2a2016; border: 1px solid #d29922; border-radius: 6px; padding: 10px; margin-bottom: 8px; font-size: 12px; }
-  #token { position: absolute; top: 14px; right: 20px; width: 220px; background: #0f1117; color: #d7dce5; border: 1px solid #2a2f3d; border-radius: 4px; padding: 5px; }
-  .status { font-size: 11px; color: #8b93a7; }
+  :root {
+    --bg: #0a0e14; --panel: #111722; --panel2: #161e2c; --line: #1f2937;
+    --text: #d8dee9; --dim: #7d8590; --accent: #3b82f6; --accent2: #60a5fa;
+    --green: #34d399; --amber: #fbbf24; --red: #f87171; --purple: #a78bfa;
+    --cyan: #22d3ee; --mono: ui-monospace, "JetBrains Mono", Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: var(--bg); color: var(--text); font: 14px/1.5 system-ui, "PingFang SC", "Microsoft YaHei", sans-serif; height: 100vh; display: flex; flex-direction: column; }
+
+  /* ── 顶栏 ─────────────────────────────── */
+  header { display: flex; align-items: center; gap: 14px; padding: 10px 18px;
+    background: linear-gradient(180deg, #131a28, #0e1420); border-bottom: 1px solid var(--line); }
+  .logo { display: flex; align-items: center; gap: 9px; font-weight: 700; font-size: 15px; letter-spacing: .5px; }
+  .logo .mark { width: 26px; height: 26px; border-radius: 6px; display: grid; place-items: center;
+    background: linear-gradient(135deg, #2563eb, #7c3aed); font-size: 15px; }
+  .logo small { color: var(--dim); font-weight: 400; font-size: 11px; }
+  .conn { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--dim); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #4b5563; transition: .3s; }
+  .dot.ok { background: var(--green); box-shadow: 0 0 8px var(--green); }
+  .dot.err { background: var(--red); }
+  header .spacer { flex: 1; }
+  #token { width: 240px; padding: 7px 11px; background: var(--bg); color: var(--text);
+    border: 1px solid var(--line); border-radius: 7px; font-family: var(--mono); font-size: 12px; }
+  #token:focus { outline: none; border-color: var(--accent); }
+
+  /* ── 主体三栏 ─────────────────────────── */
+  main { flex: 1; display: grid; grid-template-columns: 250px 1fr 320px; min-height: 0; }
+  .col { border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+  .col:last-child { border-right: 0; }
+  .col h2 { font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--dim);
+    padding: 12px 14px 8px; display: flex; align-items: center; gap: 8px; }
+  .col h2 .count { background: var(--panel2); border: 1px solid var(--line); border-radius: 9px;
+    padding: 0 7px; font-size: 10px; color: var(--text); }
+  .scroll { overflow-y: auto; flex: 1; padding: 0 10px 12px; }
+  .scroll::-webkit-scrollbar { width: 8px; } .scroll::-webkit-scrollbar-thumb { background: #232d3f; border-radius: 4px; }
+
+  /* ── 会话列表 ─────────────────────────── */
+  #new-session { margin: 2px 4px 10px; padding: 12px; background: var(--panel2);
+    border: 1px solid var(--line); border-radius: 10px; }
+  #new-session label { font-size: 11px; color: var(--dim); display: block; margin-bottom: 5px; }
+  #new-session input { width: 100%; padding: 7px 10px; background: var(--bg); color: var(--text);
+    border: 1px solid var(--line); border-radius: 6px; font-family: var(--mono); font-size: 12px; margin-bottom: 8px; }
+  #new-session input:focus { outline: none; border-color: var(--accent); }
+  .btn { padding: 8px 14px; background: var(--accent); color: #fff; border: 0; border-radius: 7px;
+    cursor: pointer; font-size: 13px; font-weight: 600; transition: .15s; }
+  .btn:hover { background: var(--accent2); }
+  .btn.deny { background: #b91c1c; } .btn.deny:hover { background: #dc2626; }
+  .btn.ghost { background: transparent; border: 1px solid var(--line); color: var(--dim); padding: 4px 10px; font-size: 11px; }
+
+  .sess { padding: 10px 12px; border-radius: 9px; cursor: pointer; margin-bottom: 6px;
+    background: var(--panel); border: 1px solid transparent; transition: .15s; }
+  .sess:hover { border-color: var(--line); }
+  .sess.active { border-color: var(--accent); background: #14203a; }
+  .sess .sid { font-family: var(--mono); font-size: 12px; word-break: break-all; }
+  .sess .meta { display: flex; gap: 8px; margin-top: 5px; font-size: 11px; color: var(--dim); align-items: center; }
+  .badge { padding: 1px 8px; border-radius: 8px; font-size: 10px; font-weight: 600; }
+  .badge.run { background: rgba(52,211,153,.14); color: var(--green); }
+  .badge.done { background: rgba(96,165,250,.14); color: var(--accent2); }
+  .vuln-chip { font-size: 10px; padding: 1px 7px; border-radius: 8px; background: rgba(248,113,113,.13); color: var(--red); }
+
+  /* ── 中栏：详情 ───────────────────────── */
+  #detail { display: flex; flex-direction: column; min-height: 0; }
+  #stagebar { display: flex; gap: 4px; padding: 12px 14px 4px; }
+  .stage { flex: 1; text-align: center; font-size: 10px; color: var(--dim); padding-top: 7px;
+    border-top: 3px solid var(--line); transition: .3s; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .stage.done { border-top-color: var(--green); color: var(--green); }
+  .stage.cur { border-top-color: var(--amber); color: var(--amber); }
+  #stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding: 10px 14px; }
+  .stat { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+  .stat .num { font-size: 22px; font-weight: 700; font-family: var(--mono); }
+  .stat .lbl { font-size: 11px; color: var(--dim); }
+  .sev-row { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+  .sev { font-size: 10px; font-family: var(--mono); padding: 1px 7px; border-radius: 8px; }
+  .sev.critical { background: rgba(167,139,250,.16); color: var(--purple); }
+  .sev.high { background: rgba(248,113,113,.16); color: var(--red); }
+  .sev.medium { background: rgba(251,191,36,.14); color: var(--amber); }
+  .sev.low { background: rgba(34,211,238,.13); color: var(--cyan); }
+  .sev.info { background: rgba(125,133,144,.15); color: var(--dim); }
+
+  #filters { display: flex; gap: 6px; padding: 6px 14px; flex-wrap: wrap; align-items: center; }
+  .chip { padding: 3px 11px; border-radius: 12px; font-size: 11px; cursor: pointer;
+    background: var(--panel2); border: 1px solid var(--line); color: var(--dim); user-select: none; }
+  .chip.on { color: #fff; border-color: var(--accent); background: #1a2a4a; }
+  #autoscroll { margin-left: auto; font-size: 11px; color: var(--dim); display: flex; gap: 5px; align-items: center; cursor: pointer; }
+
+  #events { flex: 1; overflow-y: auto; padding: 6px 14px 16px; font-family: var(--mono); font-size: 12px; }
+  .ev { display: flex; gap: 10px; padding: 5px 10px; margin-bottom: 4px; background: var(--panel);
+    border-left: 3px solid var(--dim); border-radius: 0 8px 8px 0; }
+  .ev .seq { color: var(--dim); min-width: 38px; text-align: right; }
+  .ev .type { min-width: 96px; font-weight: 600; }
+  .ev .body { flex: 1; color: #aeb8c4; word-break: break-all; white-space: pre-wrap; }
+  .ev.action { border-left-color: var(--amber); } .ev.action .type { color: var(--amber); }
+  .ev.observation { border-left-color: var(--green); } .ev.observation .type { color: var(--green); }
+  .ev.llm_error { border-left-color: var(--red); } .ev.llm_error .type { color: var(--red); }
+  .ev.stage_advance { border-left-color: var(--accent); } .ev.stage_advance .type { color: var(--accent2); }
+  .ev.finish { border-left-color: var(--purple); } .ev.finish .type { color: var(--purple); }
+  .ev.resume, .ev.start { border-left-color: var(--cyan); } .ev.resume .type, .ev.start .type { color: var(--cyan); }
+  .pchip { font-size: 10px; padding: 0 6px; border-radius: 6px; background: rgba(34,211,238,.15); color: var(--cyan); }
+
+  /* ── 右栏：审批 ───────────────────────── */
+  .approval { background: linear-gradient(180deg, #241d10, #1c170c); border: 1px solid #6b5220;
+    border-radius: 10px; padding: 12px; margin-bottom: 10px; }
+  .approval .tool { font-family: var(--mono); color: var(--amber); font-weight: 700; font-size: 13px; }
+  .approval pre { font-size: 11px; font-family: var(--mono); color: #c8b98a; background: rgba(0,0,0,.3);
+    border-radius: 6px; padding: 8px; margin: 8px 0; max-height: 130px; overflow: auto; }
+  .approval .acts { display: flex; gap: 8px; }
+  .approval .acts .btn { flex: 1; padding: 6px; }
+  .approval.decided { opacity: .45; pointer-events: none; }
+
+  /* ── 引导态 / 空态 ────────────────────── */
+  #guide { margin: 14px; background: var(--panel); border: 1px dashed #2c3a52; border-radius: 12px; padding: 22px; }
+  #guide h3 { font-size: 15px; margin-bottom: 14px; display: flex; gap: 8px; align-items: center; }
+  #guide ol { margin: 0 0 16px 20px; }
+  #guide li { margin-bottom: 8px; color: #b7c0cd; }
+  #guide code { font-family: var(--mono); background: var(--bg); padding: 2px 7px; border-radius: 5px; font-size: 12px; color: var(--cyan); }
+  table.targets { width: 100%; border-collapse: collapse; font-size: 12px; }
+  table.targets th, table.targets td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); }
+  table.targets th { color: var(--dim); font-weight: 500; font-size: 11px; }
+  table.targets td.mono { font-family: var(--mono); color: var(--cyan); }
+  .empty { text-align: center; color: var(--dim); font-size: 12px; padding: 34px 10px; }
+  .toast { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%); background: #1e293b;
+    border: 1px solid var(--line); padding: 10px 20px; border-radius: 9px; font-size: 13px;
+    opacity: 0; transition: .3s; pointer-events: none; z-index: 9; }
+  .toast.show { opacity: 1; }
 </style>
 </head>
 <body>
-<header><h1>PentestAgent Console</h1><input id="token" placeholder="Bearer Token"></header>
+<header>
+  <div class="logo"><span class="mark">⚔</span>PentestAgent <small>RedBlue Console</small></div>
+  <div class="conn"><span class="dot" id="conn-dot"></span><span id="conn-text">未连接</span></div>
+  <div class="spacer"></div>
+  <input id="token" placeholder="粘贴 PENTESTAGENT_TOKEN" spellcheck="false">
+</header>
+
 <main>
-  <section id="left">
-    <h2>Sessions</h2>
-    <div id="new-session">
-      <input id="target" placeholder="target, e.g. 192.168.1.100">
-      <button onclick="createSession()">Start</button>
+  <!-- 左栏 -->
+  <div class="col">
+    <h2>Sessions <span class="count" id="sess-count">0</span></h2>
+    <div class="scroll">
+      <div id="new-session">
+        <label>目标（新会话）</label>
+        <input id="target" placeholder="如 172.20.0.10" spellcheck="false">
+        <button class="btn" style="width:100%" onclick="createSession()">▶ 开始测试</button>
+      </div>
+      <div id="sessions"><div class="empty">暂无会话</div></div>
     </div>
-    <div id="sessions"></div>
-  </section>
-  <section>
-    <h2>Event Stream <span class="status" id="stream-status"></span></h2>
-    <div id="events"></div>
-  </section>
-  <section>
-    <h2>Pending Approvals</h2>
-    <div id="approvals"></div>
-  </section>
+  </div>
+
+  <!-- 中栏 -->
+  <div class="col" id="detail">
+    <div id="stagebar"></div>
+    <div id="stats"></div>
+    <div id="filters">
+      <span class="chip on" data-f="all" onclick="toggleFilter(this)">全部</span>
+      <span class="chip" data-f="action" onclick="toggleFilter(this)">动作</span>
+      <span class="chip" data-f="observation" onclick="toggleFilter(this)">观察</span>
+      <span class="chip" data-f="stage_advance" onclick="toggleFilter(this)">阶段</span>
+      <span class="chip" data-f="llm_error" onclick="toggleFilter(this)">错误</span>
+      <label id="autoscroll"><input type="checkbox" checked> 自动滚动</label>
+    </div>
+    <div id="events">
+      <div class="empty">← 左侧选择或创建会话，实时事件流将在此显示</div>
+    </div>
+  </div>
+
+  <!-- 右栏 -->
+  <div class="col">
+    <h2>待审批 <span class="count" id="appr-count">0</span></h2>
+    <div class="scroll" id="approvals"><div class="empty">无待审批项<br><small style="color:#5a6472">危险操作在 SECURITY_APPROVAL_POLICY=file 时出现</small></div></div>
+  </div>
 </main>
+<div class="toast" id="toast"></div>
+
 <script>
 const $ = (id) => document.getElementById(id);
-let currentSid = null, es = null;
+const STAGES = [
+  ["target_confirmation", "目标确认"], ["information_gathering", "信息收集"],
+  ["vulnerability_scanning", "漏洞扫描"], ["vulnerability_analysis", "漏洞分析"],
+  ["vulnerability_exploitation", "漏洞利用"], ["post_exploitation", "后渗透"],
+  ["report_generation", "报告"],
+];
+let currentSid = null, es = null, filter = "all";
+let sessMeta = {};   // sid -> {finished, vulns, running}
 
-function authHeaders() {
-  return { "Authorization": "Bearer " + $("token").value.trim() };
+const authHeaders = () => ({ "Authorization": "Bearer " + $("token").value.trim() });
+
+function toast(msg, ok = true) {
+  const t = $("toast");
+  t.textContent = msg;
+  t.style.borderColor = ok ? "var(--green)" : "var(--red)";
+  t.classList.add("show");
+  setTimeout(() => t.classList.remove("show"), 2600);
 }
 
+/* ── 连接状态 ─────────────────────────── */
+async function ping() {
+  const dot = $("conn-dot"), text = $("conn-text");
+  if (!$("token").value.trim()) { dot.className = "dot"; text.textContent = "未连接（填 Token）"; return false; }
+  try {
+    const r = await fetch("/api/sessions", { headers: authHeaders() });
+    dot.className = "dot " + (r.ok ? "ok" : "err");
+    text.textContent = r.ok ? "已连接" : "Token 无效";
+    return r.ok;
+  } catch { dot.className = "dot err"; text.textContent = "服务不可达"; return false; }
+}
+
+/* ── 引导横幅（中栏顶部，未选会话时） ─── */
+function renderGuide() {
+  $("stagebar").innerHTML = "";
+  $("stats").innerHTML = "";
+  $("events").innerHTML = `
+  <div id="guide">
+    <h3>🚀 快速开始</h3>
+    <ol>
+      <li>右上角粘贴 <code>PENTESTAGENT_TOKEN</code>（启动 serve.py 时设置的值）</li>
+      <li>左上角「目标」填入已授权的测试目标 IP，点 <b>开始测试</b></li>
+      <li>本栏实时显示事件流；危险操作会出现在右侧「待审批」</li>
+    </ol>
+    <h3>🎯 靶场速查</h3>
+    <table class="targets">
+      <tr><th>靶场</th><th>难度</th><th>容器内地址</th></tr>
+      <tr><td>内置 VulnApp</td><td>★☆☆</td><td class="mono">http://172.20.0.10:5000</td></tr>
+      <tr><td>Juice Shop</td><td>★★★</td><td class="mono">http://172.20.0.13:3000</td></tr>
+      <tr><td>DVWA</td><td>★★☆</td><td class="mono">http://172.20.0.11:80</td></tr>
+    </table>
+    <p style="margin-top:12px;font-size:12px;color:var(--dim)">
+      启动靶场：<code style="font-size:11px">cd docker && docker compose --profile hard up -d</code>（Juice Shop）
+       / <code style="font-size:11px">up -d target</code>（VulnApp）</p>
+  </div>`;
+}
+
+/* ── 会话列表 ─────────────────────────── */
 async function refreshSessions() {
+  if (!await ping()) return;
   const r = await fetch("/api/sessions", { headers: authHeaders() });
   if (!r.ok) return;
-  const data = await r.json();
-  $("sessions").innerHTML = "";
-  for (const sid of data.sessions) {
+  const { sessions } = await r.json();
+  $("sess-count").textContent = sessions.length;
+  const box = $("sessions");
+  box.innerHTML = sessions.length ? "" : '<div class="empty">暂无会话</div>';
+  for (const sid of sessions) {
+    if (!(sid in sessMeta)) sessMeta[sid] = { finished: false, vulns: null, running: false };
+    const m = sessMeta[sid];
     const div = document.createElement("div");
-    div.className = "sid" + (sid === currentSid ? " active" : "");
-    div.textContent = sid;
+    div.className = "sess" + (sid === currentSid ? " active" : "");
+    div.innerHTML = `<div class="sid">${sid}</div><div class="meta">
+      <span class="badge ${m.finished ? "done" : "run"}">${m.finished ? "已完成" : (m.running ? "运行中" : "已保存")}</span>
+      ${m.vulns != null ? `<span class="vuln-chip">◤ ${m.vulns} 漏洞</span>` : ""}
+    </div>`;
     div.onclick = () => openSession(sid);
-    $("sessions").appendChild(div);
+    box.appendChild(div);
+    if (m.vulns == null) loadSnapshot(sid, false); // 后台补状态
   }
 }
 
-async function createSession() {
-  const target = $("target").value.trim();
-  if (!target) return alert("target required");
-  const r = await fetch("/api/sessions", {
-    method: "POST", headers: { ...authHeaders(), "Content-Type": "application/json" },
-    body: JSON.stringify({ target }),
-  });
-  if (!r.ok) return alert((await r.json()).detail || r.status);
-  const { session_id } = await r.json();
-  setTimeout(() => { refreshSessions(); openSession(session_id); }, 500);
+async function loadSnapshot(sid, render) {
+  try {
+    const r = await fetch(`/api/sessions/${sid}`, { headers: authHeaders() });
+    if (!r.ok) return;
+    const snap = await r.json();
+    const st = snap.state || {};
+    const vulns = (st.vulnerabilities || []).length;
+    const finished = st.current_stage === "report_generation" || st.current_stage === "finished";
+    sessMeta[sid] = { ...(sessMeta[sid] || {}), vulns, finished };
+    if (render) renderState(st);
+    refreshSessions();
+  } catch {}
 }
+
+function renderState(st) {
+  const completed = new Set(st.stages_completed || []);
+  const cur = st.current_stage;
+  $("stagebar").innerHTML = STAGES.map(([v, label]) => {
+    const cls = completed.has(v) || v === "finished" ? "done" : (v === cur ? "cur" : "");
+    return `<div class="stage ${cls}" title="${v}">${completed.has(v) ? "✓ " : ""}${label}</div>`;
+  }).join("");
+
+  const sevCount = {};
+  for (const v of (st.vulnerabilities || [])) {
+    const s = (v.severity || "info").toLowerCase();
+    sevCount[s] = (sevCount[s] || 0) + 1;
+  }
+  const sevHtml = Object.entries(sevCount).sort().map(([s, n]) =>
+    `<span class="sev ${s}">${s[0].toUpperCase()} ${n}</span>`).join("");
+  const stat = (num, lbl, extra = "") =>
+    `<div class="stat"><div class="num">${num}</div><div class="lbl">${lbl}</div>${extra}</div>`;
+  $("stats").innerHTML =
+    stat((st.vulnerabilities || []).length, "漏洞", `<div class="sev-row">${sevHtml}</div>`) +
+    stat(st.total_iterations ?? 0, "迭代") +
+    stat(sessMeta[currentSid]?.parallel ?? 0, "并行批次") +
+    stat(st.hosts?.length ?? 0, "主机");
+}
+
+/* ── 事件流 ───────────────────────────── */
+function describe(e) {
+  const d = e.d || {};
+  const a = d.action || {};
+  switch (e.t) {
+    case "start": return `目标 ${d.target} | scope ${(d.scope || []).join(", ")}`;
+    case "action": return (a.tool || "?") + "  " + JSON.stringify(a.params || {});
+    case "observation": {
+      if (d.kind === "tool_result") {
+        const p = d.payload || {};
+        return (a.tool || "?") + (p.success === false ? " ✗ " + (p.error_message || "失败") : " ✓ 完成");
+      }
+      return String(d.payload || "").slice(0, 140);
+    }
+    case "llm_error": return String(d.payload || "").slice(0, 160) + (d.consecutive ? `（连续 ${d.consecutive} 次）` : "");
+    case "stage_advance": return `${d.from} → ${d.to}${d.forced ? "（强制推进）" : ""}`;
+    case "finish": return `共 ${d.iterations} 轮，发现 ${d.vulnerabilities} 个漏洞`;
+    case "resume": return "进程中断后恢复";
+    default: return JSON.stringify(d).slice(0, 120);
+  }
+}
+
+function appendEvent(e) {
+  if (currentSid && (e.t === "finish")) { sessMeta[currentSid].finished = true; refreshSessions(); }
+  if (e.t === "action" && e.d?.parallel) sessMeta[currentSid] && (sessMeta[currentSid].parallel = (sessMeta[currentSid].parallel || 0) + 1);
+  if (e.t === "stage_advance" && currentSid) loadSnapshot(currentSid, true);
+
+  if (filter !== "all" && e.t !== filter && !(filter === "action" && e.d?.parallel)) return;
+  const box = $("events");
+  if (box.querySelector(".empty")) box.innerHTML = "";
+  const div = document.createElement("div");
+  div.className = "ev " + e.t;
+  const par = e.d?.parallel ? ' <span class="pchip">PARALLEL</span>' : "";
+  div.innerHTML = `<span class="seq">#${e.seq ?? "·"}</span><span class="type">${e.t}${par}</span><span class="body"></span>`;
+  div.querySelector(".body").textContent = describe(e);
+  box.appendChild(div);
+  while (box.children.length > 500) box.removeChild(box.firstChild);
+  if ($("autoscroll").querySelector("input").checked) box.scrollTop = box.scrollHeight;
+}
+
+function toggleFilter(chip) {
+  document.querySelectorAll("#filters .chip").forEach(c => c.classList.remove("on"));
+  chip.classList.add("on");
+  filter = chip.dataset.f;
+  // 重放已缓存的原始事件
+  const box = $("events");
+  box.innerHTML = "";
+  for (const e of eventBuffer) appendEvent(e);
+}
+let eventBuffer = [];
 
 function openSession(sid) {
   currentSid = sid;
+  sessMeta[sid] = { ...(sessMeta[sid] || {}), running: true, finished: sessMeta[sid]?.finished || false, parallel: 0 };
   if (es) es.close();
-  $("events").innerHTML = "";
-  $("stream-status").textContent = "(" + sid + ")";
-  es = new EventSource("/api/sessions/" + sid + "/events");
-  es.onmessage = (m) => {
-    const e = JSON.parse(m.data);
-    const div = document.createElement("div");
-    div.className = "ev " + (e.t || "");
-    div.textContent = "#" + (e.seq ?? "?") + " " + e.t + " " +
-      JSON.stringify(e.d).slice(0, 300);
-    $("events").appendChild(div);
-    $("events").scrollTop = $("events").scrollHeight;
-    if (e.t === "finish") { es.close(); $("stream-status").textContent += " [finished]"; }
-  };
-  es.onerror = () => { }; // server closed or auth missing; keep quiet
-  refreshApprovals();
+  eventBuffer = [];
+  $("events").innerHTML = '<div class="empty">连接事件流…</div>';
+  loadSnapshot(sid, true);
   refreshSessions();
+
+  // EventSource 不能带 Authorization 头，SSE 用 query token（服务端支持）
+  es = new EventSource(`/api/sessions/${sid}/events?token=${encodeURIComponent($("token").value.trim())}`);
+  es.onmessage = (m) => {
+    try {
+      const e = JSON.parse(m.data);
+      eventBuffer.push(e);
+      appendEvent(e);
+      if (e.t === "finish") { es.close(); sessMeta[sid].running = false; refreshSessions(); }
+    } catch {}
+  };
+  es.onerror = () => { /* finish 后服务端关流，onmessage 已处理状态 */ };
+  refreshApprovals();
 }
 
+/* ── 新会话 ───────────────────────────── */
+async function createSession() {
+  const target = $("target").value.trim();
+  if (!target) return toast("请填写目标地址", false);
+  if (!await ping()) return toast("请先填写有效 Token", false);
+  const r = await fetch("/api/sessions", {
+    method: "POST",
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
+    body: JSON.stringify({ target }),
+  });
+  if (!r.ok) return toast("创建失败：" + ((await r.json()).detail || r.status), false);
+  const { session_id } = await r.json();
+  toast("会话已启动：" + session_id);
+  $("target").value = "";
+  setTimeout(() => { refreshSessions(); openSession(session_id); }, 600);
+}
+
+/* ── 审批 ─────────────────────────────── */
 async function refreshApprovals() {
-  if (!currentSid) return;
+  if (!currentSid || !await ping().catch(() => false)) return;
   const r = await fetch(`/api/sessions/${currentSid}/approvals`, { headers: authHeaders() });
   if (!r.ok) return;
   const { pending } = await r.json();
-  $("approvals").innerHTML = "";
+  $("appr-count").textContent = pending.length;
+  const box = $("approvals");
+  box.innerHTML = pending.length ? "" : '<div class="empty">无待审批项</div>';
   for (const p of pending) {
     const div = document.createElement("div");
     div.className = "approval";
-    div.textContent = `[${p.tool}] ${JSON.stringify(p.params).slice(0, 120)}`;
-    const ok = document.createElement("button"); ok.textContent = "Approve";
-    const no = document.createElement("button"); no.textContent = "Deny"; no.className = "deny";
-    ok.style.marginRight = no.style.marginLeft = "6px";
+    div.innerHTML = `<div class="tool">⚠ ${p.tool || "?"}</div>
+      <pre></pre>
+      <div class="acts">
+        <button class="btn">批准</button><button class="btn deny">拒绝</button>
+      </div>`;
+    div.querySelector("pre").textContent = JSON.stringify(p.params ?? p, null, 2);
+    const [ok, no] = div.querySelectorAll("button");
     ok.onclick = () => decide(p.id, true, div);
     no.onclick = () => decide(p.id, false, div);
-    div.appendChild(ok); div.appendChild(no);
-    $("approvals").appendChild(div);
+    box.appendChild(div);
   }
 }
 
 async function decide(id, approved, div) {
   const r = await fetch(`/api/sessions/${currentSid}/approvals/${id}`, {
-    method: "POST", headers: { ...authHeaders(), "Content-Type": "application/json" },
+    method: "POST",
+    headers: { ...authHeaders(), "Content-Type": "application/json" },
     body: JSON.stringify({ approved }),
   });
-  if (r.ok) div.remove();
+  if (r.ok) { div.classList.add("decided"); toast(approved ? "已批准" : "已拒绝"); setTimeout(refreshApprovals, 800); }
 }
 
+/* ── 主循环 ───────────────────────────── */
+let _deb;
+$("token").addEventListener("input", () => {
+  clearTimeout(_deb);
+  _deb = setTimeout(() => { ping().then(ok => ok && refreshSessions()); }, 350);
+});
+renderGuide();
 setInterval(refreshSessions, 5000);
-setInterval(refreshApprovals, 3000);
-refreshSessions();
+setInterval(() => currentSid && refreshApprovals(), 3000);
+ping().then(ok => ok && refreshSessions());
 </script>
 </body>
 </html>

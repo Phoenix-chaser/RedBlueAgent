@@ -53,8 +53,10 @@ def create_app(
     def require_token(request: Request) -> None:
         if token == "":
             return  # auth explicitly disabled (tests / localhost-only setups)
+        # EventSource 无法携带 Authorization 头，SSE 场景允许 ?token= query
+        q_token = request.query_params.get("token", "")
         auth = request.headers.get("Authorization", "")
-        if auth != f"Bearer {token}":
+        if auth != f"Bearer {token}" and q_token != token:
             raise HTTPException(status_code=401, detail="invalid or missing token")
 
     # ── 会话 ────────────────────────────────────────────────────────────

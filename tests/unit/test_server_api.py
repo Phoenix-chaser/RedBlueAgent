@@ -145,3 +145,12 @@ def test_create_session_conflict_409(tmp_path):
     r = client.post("/api/sessions", headers=auth(client),
                     json={"target": "192.168.1.100", "session_id": "s1"})
     assert r.status_code == 409
+
+
+def test_query_token_for_eventsource(tmp_path):
+    """EventSource cannot send Authorization headers; SSE must accept ?token=."""
+    client = make_client(tmp_path, sessions={"s1": seed_events()})
+    r = client.get("/api/sessions/s1/events?follow=0&token=" + TOKEN)
+    assert r.status_code == 200 and '"seq": 3' in r.text
+    # wrong query token still rejected
+    assert client.get("/api/sessions/s1/events?token=wrong").status_code == 401

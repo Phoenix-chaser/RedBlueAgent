@@ -24,18 +24,39 @@ def main() -> int:
         return 1
 
     import uvicorn
+    from rich.console import Console
+    from rich.panel import Panel
+    from rich.text import Text
     from server.app import create_app
 
+    host = os.getenv("PENTESTAGENT_HOST", "127.0.0.1")
+    port = int(os.getenv("PENTESTAGENT_PORT", "8095"))
     app = create_app(
         sessions_dir=os.getenv("PENTESTAGENT_SESSIONS_DIR", "data/sessions"),
         token=token,
     )
-    uvicorn.run(
-        app,
-        host=os.getenv("PENTESTAGENT_HOST", "127.0.0.1"),
-        port=int(os.getenv("PENTESTAGENT_PORT", "8095")),
-        log_level="info",
-    )
+
+    banner = Text()
+    banner.append("⚔ PentestAgent Console\n\n", style="bold cyan")
+    banner.append("➜ 控制台  ", style="dim")
+    if host == "0.0.0.0":
+        banner.append(f"http://<本机IP或容器IP>:{port}/", style="bold green")
+        banner.append("（已监听全部网卡；容器内运行时用 docker inspect 取容器 IP）\n", style="dim")
+    else:
+        banner.append(f"http://{host}:{port}/\n", style="bold green")
+    banner.append("三步上手：\n", style="bold")
+    banner.append("  1. 打开控制台，右上角粘贴 Token（本进程的 PENTESTAGENT_TOKEN）\n")
+    banner.append("  2. 左上角「目标」填入已授权目标 IP → 开始测试\n")
+    banner.append("  3. 实时事件流在中央；危险操作在右侧「待审批」按钮放行/拒绝\n\n")
+    banner.append("靶场（另开终端）：\n", style="bold")
+    banner.append("  cd docker && docker compose up -d target", style="cyan")
+    banner.append("            # ★☆☆ VulnApp   172.20.0.10:5000 / localhost:8080\n", style="dim")
+    banner.append("  cd docker && docker compose --profile hard up -d", style="cyan")
+    banner.append("  # ★★★ JuiceShop 172.20.0.13:3000 / localhost:3000\n", style="dim")
+
+    Console().print(Panel(banner, border_style="blue", title="就绪", title_align="left"))
+
+    uvicorn.run(app, host=host, port=port, log_level="info")
     return 0
 
 

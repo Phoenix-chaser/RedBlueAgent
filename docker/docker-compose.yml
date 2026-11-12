@@ -1,17 +1,29 @@
 version: "3.8"
 
 # =============================================================================
-# 靶场环境 - 仅用于启动测试目标
-# Agent 直接在 Kali 宿主机运行，无需容器
+# 靶场环境 - 按难度梯度选择（Agent 在宿主机或 pentestagent:live 容器运行）
 #
-# 启动: docker compose up -d target
-# 靶场: http://localhost:8080  (容器内 IP: 172.20.0.10)
+# 难度梯度:
+#   target      ★☆☆  内置 VulnApp: SQLi/XSS/命令注入/路径遍历/弱密码/IDOR，
+#                    开箱即用，适合链路验证（http://localhost:8080）
+#   juice-shop  ★★★  OWASP Juice Shop: 现代单页应用（Node/Angular），150+ 漏洞
+#                    覆盖 OWASP Top 10 全谱系，含业务逻辑/前端正则绕过/API 滥用
+#                    （http://localhost:3000）— 对 LLM Agent 最有挑战性
+#   dvwa        ★★☆  DVWA 经典注入/XSS/文件上传/CSRF，需先访问 /setup.php
+#                    初始化数据库并将安全等级设为 Low/Medium（http://localhost:8081）
+#   mutillidae  ★★☆  Mutillidae II 全谱系训练场（http://localhost:8082）
+#
+# 启动:
+#   docker compose up -d target                      # 入门靶场
+#   docker compose --profile hard up -d              # + Juice Shop
+#   docker compose --profile dvwa --profile extra up -d   # + 经典双靶
+#   docker compose --profile all up -d               # 全家桶
 # =============================================================================
 
 services:
 
   # ---------------------------------------------------------------------------
-  # 内置靶场 (Built-in Vulnerable Target)
+  # 内置靶场 (Built-in Vulnerable Target) ★☆☆
   # 包含: SQLi / XSS / 命令注入 / 路径遍历 / 弱密码 / IDOR
   # ---------------------------------------------------------------------------
   target:
@@ -32,9 +44,34 @@ services:
       start_period: 15s
 
   # ---------------------------------------------------------------------------
-  # DVWA (可选)
+  # OWASP Juice Shop (可选) ★★★
+  # 现代 SPA 靶场：150+ 漏洞，对 LLM Agent 最具挑战（业务逻辑/前端绕过/API）
+  # 启动: docker compose --profile hard up -d
+  # 访问: http://localhost:3000  |  进度板: http://localhost:3000/#/score-board
+  # ---------------------------------------------------------------------------
+  juice-shop:
+    image: bkimminich/juice-shop:latest
+    ports:
+      - "3000:3000"
+    networks:
+      pentest_net:
+        ipv4_address: 172.20.0.13
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:3000/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    profiles:
+      - hard
+      - all
+
+  # ---------------------------------------------------------------------------
+  # DVWA (可选) ★★☆
   # 启动: docker compose --profile dvwa up -d
-  # 访问: http://localhost:8081
+  # 首次需访问 http://localhost:8081/setup.php 创建数据库，
+  # 默认账号 admin/password，安全等级建议设 Low/Medium
   # ---------------------------------------------------------------------------
   dvwa:
     image: vulnerables/web-dvwa:latest
@@ -46,10 +83,12 @@ services:
     restart: unless-stopped
     profiles:
       - dvwa
+      - all
 
   # ---------------------------------------------------------------------------
-  # Mutillidae (可选)
+  # Mutillidae (可选) ★★☆
   # 启动: docker compose --profile extra up -d
+  # 访问: http://localhost:8082
   # ---------------------------------------------------------------------------
   mutillidae:
     image: webpwnized/mutillidae:latest
@@ -61,6 +100,7 @@ services:
     restart: unless-stopped
     profiles:
       - extra
+      - all
 
 networks:
   pentest_net:
