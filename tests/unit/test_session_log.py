@@ -256,3 +256,27 @@ def test_collect_action_hashes_covers_pre_snapshot_history():
     ]
     hashes = collect_action_hashes(events)
     assert len(hashes) == 2  # nmap (pre-snapshot) + nikto (post-snapshot)
+
+
+def test_endpoint_key_ignores_query_and_scheme():
+    from agent.session_log import endpoint_key
+    a = endpoint_key("sqlmap", {"url": "http://172.20.0.13:3000/rest/product/search?q=1&level=5"})
+    b = endpoint_key("sqlmap", {"url": "https://172.20.0.13:3000/rest/product/search?q=999"})
+    assert a == b == ("sqlmap", "172.20.0.13:3000/rest/product/search")
+    # 裸 host（nmap target）与带端口 URL 不同键；不同 path 不同键
+    assert endpoint_key("nmap", {"target": "172.20.0.13"}) == ("nmap", "172.20.0.13/")
+    assert endpoint_key("sqlmap", {"url": "http://h:1/a"}) != endpoint_key("sqlmap", {"url": "http://h:1/b"})
+    assert endpoint_key(None, {"target": "x"}) is None
+
+
+def test_collect_endpoint_counts_from_events():
+    from agent.session_log import collect_endpoint_counts
+    events = [
+        {"seq": 1, "t": "action", "d": {"action": {"tool": "sqlmap", "params": {"url": "http://h:1/p?q=1"}}}},
+        {"seq": 2, "t": "action", "d": {"action": {"tool": "sqlmap", "params": {"url": "http://h:1/p?q=2"}}}},
+        {"seq": 3, "t": "action", "d": {"action": {"tool": "sqlmap", "params": {"url": "http://h:1/p?q=3"}}}},
+        {"seq": 4, "t": "action", "d": {"action": {"tool": "nmap", "params": {"target": "h"}}}},
+    ]
+    counts = collect_endpoint_counts(events)
+    assert counts[("sqlmap", "h:1/p")] == 3
+    assert counts[("nmap", "h/")] == 1

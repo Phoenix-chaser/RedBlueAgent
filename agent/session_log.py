@@ -230,6 +230,44 @@ def collect_action_hashes(events: list[dict]) -> set[int]:
     return hashes
 
 
+def endpoint_key(tool: str | None, params: dict) -> tuple[str, str] | None:
+    """Semantic endpoint key: (tool, host+path) — query/scheme ignored.
+
+    Live test on Juice Shop found LLMs evading exact-hash repeat detection by
+    micro-tweaking tail parameters against the same endpoint; counting per
+    (tool, endpoint) catches that. None if no target-bearing param.
+    """
+    if not tool:
+        return None
+    from urllib.parse import urlparse
+
+    for k in ("url", "target", "rhosts", "host"):
+        v = params.get(k) if isinstance(params, dict) else None
+        if v:
+            raw = str(v).strip()
+            if "://" not in raw and k in ("target", "rhosts", "host"):
+                raw = "http://" + raw.split("/")[0].split(":")[0]
+            p = urlparse(raw)
+            host = p.netloc.split("@")[-1] or p.path.split("/")[0].split(":")[0]
+            path = p.path or "/"
+            return (tool.lower(), f"{host}{path}")
+    return None
+
+
+def collect_endpoint_counts(events: list[dict]) -> dict[tuple[str, str], int]:
+    """Executed-action counts per semantic endpoint (whole log), so the
+    same-endpoint budget survives resume like action hashes do."""
+    counts: dict[tuple[str, str], int] = {}
+    for e in events:
+        if e.get("t") != "action":
+            continue
+        a = (e.get("d") or {}).get("action") or {}
+        key = endpoint_key(a.get("tool"), a.get("params") or {})
+        if key:
+            counts[key] = counts.get(key, 0) + 1
+    return counts
+
+
 def replay_into_state(
     state: PentestState,
     events: list[dict],

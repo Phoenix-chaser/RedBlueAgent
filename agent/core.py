@@ -29,6 +29,7 @@ from agent.session_log import (
     EventLog,
     SessionLock,
     collect_action_hashes,
+    collect_endpoint_counts,
     replay_into_state,
 )
 
@@ -251,7 +252,8 @@ class PentestAgent:
                 action=ActionDecision(type="wait"), observation=note)
 
         return self._execute(
-            state, sessions_dir, fresh=False, event_log=log, seed_hashes=action_hashes)
+            state, sessions_dir, fresh=False, event_log=log, seed_hashes=action_hashes,
+            seed_endpoints=collect_endpoint_counts(events))
 
     def _execute(
         self,
@@ -260,6 +262,7 @@ class PentestAgent:
         fresh: bool,
         event_log: EventLog | None = None,
         seed_hashes: set[int] | None = None,
+        seed_endpoints: dict[tuple[str, str], int] | None = None,
     ):
         import signal
         from rich.console import Console
@@ -310,7 +313,8 @@ class PentestAgent:
 
             try:
                 state = self.react_loop.run(
-                    state, event_log=log, seed_action_hashes=seed_hashes)
+                    state, event_log=log, seed_action_hashes=seed_hashes,
+                    seed_endpoint_counts=seed_endpoints)
             except KeyboardInterrupt:
                 console.print("\n[yellow]Interrupted. Saving snapshot and generating partial report...[/yellow]")
 
