@@ -1,0 +1,12 @@
+# 构建上下文瘦身
+.git
+.github
+data
+venv
+**/__pycache__
+**/*.pyc
+.pytest_cache
+blueteam/results
+blueteam/models
+*.egg-info
+docs

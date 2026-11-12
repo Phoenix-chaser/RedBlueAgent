@@ -1,0 +1,33 @@
+# Agent 运行镜像：Ubuntu 基座 + 渗透工具 + 本项目
+# 用途: 在无 Kali 的机器上做全链路实测（Agent 与靶场同网络）
+#
+# 构建（在仓库根目录；--network host 让 apt/pip 走宿主代理）:
+#   docker build -f docker/Dockerfile.agent -t pentestagent:live --network host \
+#     --build-arg http_proxy=http://127.0.0.1:7890 \
+#     --build-arg https_proxy=http://127.0.0.1:7890 .
+#
+# 运行（加入靶场网络 pentest_net，会话数据落宿主 data/）:
+#   docker run -d --name pentest-agent \
+#     --network docker_pentest_net \
+#     -v $PWD/data:/app/data --env-file .env pentestagent:live
+#
+# 说明: metasploit 未装入（体积考虑）——agent 调用时走 FileNotFoundError
+# 错误回喂路径，该路径本身是实测项之一。
+FROM ubuntu:26.04
+
+ARG http_proxy
+ARG https_proxy
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      python3 python3-pip nmap nikto sqlmap curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY . .
+
+# 项目本体 + server extras（fastapi/uvicorn）+ dirsearch（pypi 版，apt 无此包）
+RUN pip3 install --break-system-packages -e ".[server]" dirsearch
+
+# 常驻容器，实测步骤由 docker exec 驱动
+CMD ["sleep", "infinity"]

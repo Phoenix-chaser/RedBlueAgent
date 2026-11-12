@@ -1,0 +1,33 @@
+# 全链路实测专用配置：小迭代上限保证单项实测在分钟级完成；
+# 压缩阈值调低以便在短会话内验证分层摘要路径。
+# 用法: python scripts/run_agent.py --config config.live.yaml --target 172.20.0.10 ...
+llm:
+  provider: zhipu
+  model: glm-5.3
+  # 智谱 Coding Plan 专用端点（OpenAI Compatible）
+  base_url: https://open.bigmodel.cn/api/coding/paas/v4
+  max_tokens: 8192
+  temperature: 0.1
+  context_window_budget: 6000   # 低阈值：强制中途触发历史压缩
+  keep_recent_turns: 8
+
+agent:
+  max_iterations: 30
+  max_stage_iterations: 6
+
+security:
+  require_approval_for_exploits: true
+  approval_policy: ""
+
+rag:
+  vector_store_dir: data/knowledge_base/vector_store
+
+storage:
+  sessions_dir: data/sessions
+  reports_dir: data/reports
+  audit_log: data/audit.log
+
+context_guard:
+  enabled: true
+  honeypot_threshold: 2
+  strict: false
