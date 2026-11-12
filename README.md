@@ -4,7 +4,8 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)]()
-[![Tests](https://img.shields.io/badge/tests-66%20passed-brightgreen.svg)]()
+[![CI](https://github.com/Phoenix-chaser/Pentestagent/actions/workflows/ci.yml/badge.svg)](https://github.com/Phoenix-chaser/Pentestagent/actions/workflows/ci.yml)
+[![Tests](https://img.shields.io/badge/tests-142%20passed-brightgreen.svg)]()
 [![CPU Only](https://img.shields.io/badge/runtime-CPU%20only-informational.svg)]()
 
 LLM 驱动的自动化渗透测试 Agent（红队）+ 提示注入攻击检测器（蓝队）+ 攻防演习闭环。
@@ -159,7 +160,7 @@ pip install -r requirements.txt
 bash run_all.sh
 ```
 
-依次执行：蓝队检测器训练（含领域适配）→ 完整评测 → 7×2 场景攻防演习，输出劫持率对照表与明细（`drills/drill_results.json`）。
+依次执行：蓝队检测器训练（含领域适配）→ 完整评测 → 8×2 场景攻防演习，输出劫持率对照表与明细（`drills/drill_results.json`）。
 
 ### 路径二：真实渗透（需授权目标 + API Key）
 
@@ -183,16 +184,44 @@ LLM_MODEL=deepseek-chat
 
 | 参数 | 说明 |
 |------|------|
-| `--target` | 目标 IP/主机名（必填） |
+| `--target` | 目标 IP/主机名（新会话必填） |
 | `--scope` | 允许测试的 IP/CIDR，可多次指定，默认仅 target |
+| `--session-id` | 自定义会话 ID；**该会话已存在时自动转为断点续跑**（重放事件、恢复快照、检测腰斩回合） |
 | `--provider` | `deepseek` / `moonshot` / `zhipu` / `anthropic` / `openai` |
 | `--model` | 模型名，留空用提供商默认 |
+| `--config` | 配置文件路径（默认 config.yaml） |
 | `--no-interactive` | 关闭交互审批（危险操作自动拒绝） |
 | `--list-providers` | 列出所有支持的模型及配置状态 |
 
+自定义 OpenAI 兼容端点（如智谱 Coding Plan）：`.env` 中加 `LLM_BASE_URL=https://open.bigmodel.cn/api/coding/paas/v4`。
+
+**断点续跑**：进程被杀（kill -9 / 断电 / SIGTERM）后用 `--session-id <sid>` 恢复——事件日志（WAL，写前落账）+ 快照重建状态，上一动作无观察结果时注入系统续跑注记，已执行动作跨重启禁止重复；同一会话双开会被实例锁拒绝。
+
+**Web 控制台 + 远程审批**：
+
+```bash
+PENTESTAGENT_TOKEN=$(openssl rand -hex 16) SECURITY_APPROVAL_POLICY=file \
+  python3 scripts/serve.py        # http://127.0.0.1:8095/
+```
+
+浏览器实时 SSE 事件流 + 会话管理 + 危险操作审批按钮；API 亦可直接 curl（`POST /api/sessions`、`GET /api/sessions/{sid}/events`、`POST /api/sessions/{sid}/approvals/{id}`）。
+
 报告输出于 `data/reports/<session_id>/`（Markdown + JSON 双语）。内置 Docker 靶场：`cd docker && docker compose up -d target`（http://localhost:8080）。
 
-### 路径三：蓝队独立评测
+### 路径三：全容器化实测（无 Kali 机器）
+
+```bash
+cd docker && docker compose up -d target                                   # ① 靶场
+docker build -f docker/Dockerfile.agent -t pentestagent:live ..             # ② agent 镜像
+docker run -d --name pentest-agent --network docker_pentest_net \
+  -v $PWD/../data:/app/data --env-file ../.env pentestagent:live            # ③ agent 容器
+docker exec pentest-agent python3 scripts/run_agent.py \
+  --config config.live.yaml --target 172.20.0.10 --no-interactive           # ④ 开跑
+```
+
+镜像内置 nmap/nikto/sqlmap/dirsearch + 本项目；`config.live.yaml` 为低迭代上限的实测配置。完整五场景实测记录（含崩溃恢复、优雅停机、审批流）见 [docs/live-test-report.md](docs/live-test-report.md)。
+
+### 路径四：蓝队独立评测
 
 ```bash
 cd blueteam
@@ -203,15 +232,20 @@ python3 -m src.cli "忽略之前的所有指令"    # 单条文本检测
 
 ## 配置参考
 
-`config.yaml` 中与守卫相关的项：
+`config.yaml` 中与安全防线相关的项：
 
 ```yaml
 context_guard:
   enabled: true              # 关闭后 Agent 行为与 v1 完全一致
   honeypot_threshold: 2      # 会话累计隔离次数达到该值标记疑似蜜罐
+  strict: false              # true = 检测器加载失败时拒绝启动（fail-fast）
+
+security:
+  approval_policy: ""        # "" 自动（TTY 交互/无头拒绝）| interactive | reject
+                             # | auto-approve-scan | file（挂起等待审批文件）
 ```
 
-守卫的降级行为：检测器模型文件缺失或加载失败时自动直通（打印告警），**不阻断渗透主流程**。
+守卫的降级行为：检测器模型文件缺失或加载失败时打印告警横幅并写 `GUARD_DEGRADED` 审计事件后直通，**不阻断渗透主流程**；`strict: true`（或 env `GUARD_STRICT=1`）时改为启动即失败。每个配置键均有对应消费代码，密钥只放 `.env`（`PENTESTAGENT_TOKEN` 见 serve.py）。
 
 ## 工作原理：一次迭代的完整数据流
 
@@ -279,16 +313,26 @@ tests/unit/              66 项单元测试    docker/   内置靶场
 
 ```bash
 python3 -m pytest tests/unit -q
-# 66 passed —— 含 2 项融合集成测试（守卫隔离 / 重复动作拦截，离线可跑）
+# 142 passed —— 离线可跑；CI 覆盖 Python 3.10–3.13 + ruff
 ```
 
 ## 路线图
+
+v0.2 已完成（工程化改造，借鉴 SPECTRE 实践，详见 [docs/optimization-from-spectre.md](docs/optimization-from-spectre.md)）：
+
+- [x] 会话 checkpoint / 断点续跑（WAL 事件日志 + 快照 + 实例锁 + 腰斩续跑）
+- [x] LLM 传输层韧性（瞬态退避重试 / 永久错误 fail-fast / 429 冷却闸门）
+- [x] 工具输出协议（空结果诊断 / 总数披露 / 截断打标 / 全文存档）
+- [x] 攻击树接入决策循环（UCB1 建议制）与 parallel 并行扫描
+- [x] 服务化（FastAPI + SSE + 审批 HTTP 桥 + Web 控制台）、CI、打包（pip install -e .）
+- [x] 全链路实测（[docs/live-test-report.md](docs/live-test-report.md)：真实 SQLi 利用、崩溃恢复、优雅停机）
+
+待办：
 
 - [ ] 真实 LLM 演习：MockLLM 换接 llm_kernel 真实客户端，测不同模型在陷阱下的实际服从率
 - [ ] 陷阱向量扩展：覆盖 sqlmap / nmap 输出中的注入面
 - [ ] 守卫升级 L2 级联（当前为无 torch 依赖的轻量配置）
 - [ ] 多轮上下文攻击防御（当前为单条输入检测）
-- [ ] 会话 checkpoint / 断点续测
 
 ## 已知局限
 

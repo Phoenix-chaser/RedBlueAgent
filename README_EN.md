@@ -4,7 +4,8 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)]()
-[![Tests](https://img.shields.io/badge/tests-66%20passed-brightgreen.svg)]()
+[![CI](https://github.com/Phoenix-chaser/Pentestagent/actions/workflows/ci.yml/badge.svg)](https://github.com/Phoenix-chaser/Pentestagent/actions/workflows/ci.yml)
+[![Tests](https://img.shields.io/badge/tests-142%20passed-brightgreen.svg)]()
 [![CPU Only](https://img.shields.io/badge/runtime-CPU%20only-informational.svg)]()
 
 An LLM-driven automated penetration testing agent (red team) + a prompt injection attack detector (blue team) + a closed-loop attack-defense drill.
@@ -189,16 +190,44 @@ Common arguments:
 
 | Argument | Description |
 |------|------|
-| `--target` | Target IP/hostname (required) |
+| `--target` | Target IP/hostname (required for new sessions) |
 | `--scope` | Allowed IP/CIDR; repeatable; defaults to target only |
+| `--session-id` | Custom session ID; **resumes the session if it already exists** (event replay, snapshot restore, interrupted-turn detection) |
 | `--provider` | `deepseek` / `moonshot` / `zhipu` / `anthropic` / `openai` |
 | `--model` | Model name; empty = provider default |
+| `--config` | Config file path (default config.yaml) |
 | `--no-interactive` | Disable interactive approval (dangerous ops auto-rejected) |
 | `--list-providers` | List all supported models and their config status |
 
+Custom OpenAI-compatible endpoint (e.g. Zhipu Coding Plan): add `LLM_BASE_URL=https://open.bigmodel.cn/api/coding/paas/v4` to `.env`.
+
+**Crash resume**: after kill -9 / SIGTERM / power loss, rerun with `--session-id <sid>` — a write-ahead event log plus snapshots rebuild state; a turn cut in half gets a system resume note; executed actions stay blocked across restarts; double-running a live session is rejected by an instance lock.
+
+**Web console + remote approval**:
+
+```bash
+PENTESTAGENT_TOKEN=$(openssl rand -hex 16) SECURITY_APPROVAL_POLICY=file \
+  python3 scripts/serve.py        # http://127.0.0.1:8095/
+```
+
+Live SSE event stream, session management, and approve/deny buttons in the browser; plain HTTP API also works (`POST /api/sessions`, `GET /api/sessions/{sid}/events`, `POST /api/sessions/{sid}/approvals/{id}`).
+
 Reports land in `data/reports/<session_id>/` (bilingual Markdown + JSON). Built-in Docker target: `cd docker && docker compose up -d target` (http://localhost:8080).
 
-### Path 3: blue-team standalone evaluation
+### Path 3: fully-containerized live test (no Kali required)
+
+```bash
+cd docker && docker compose up -d target                                   # 1. target
+docker build -f docker/Dockerfile.agent -t pentestagent:live ..             # 2. agent image
+docker run -d --name pentest-agent --network docker_pentest_net \
+  -v $PWD/../data:/app/data --env-file ../.env pentestagent:live            # 3. agent container
+docker exec pentest-agent python3 scripts/run_agent.py \
+  --config config.live.yaml --target 172.20.0.10 --no-interactive           # 4. run
+```
+
+The image bundles nmap/nikto/sqlmap/dirsearch + this project; `config.live.yaml` caps iterations for quick tests. Full five-scenario live-test record (real SQLi exploitation, crash resume, graceful shutdown, approval flow): [docs/live-test-report.md](docs/live-test-report.md).
+
+### Path 4: blue-team standalone evaluation
 
 ```bash
 cd blueteam
@@ -289,17 +318,26 @@ tests/unit/              66 unit tests      docker/   built-in target
 
 ```bash
 python3 -m pytest tests/unit -q
-# 66 passed — incl. 2 fusion integration tests (guard quarantine /
-# repeat-action block), runnable offline
+# 142 passed — runnable offline; CI covers Python 3.10–3.13 + ruff
 ```
 
 ## Roadmap
+
+Done in v0.2 (engineering overhaul informed by SPECTRE practices — see [docs/optimization-from-spectre.md](docs/optimization-from-spectre.md)):
+
+- [x] Session checkpoint / crash resume (WAL event log + snapshots + instance lock + interrupted-turn resume)
+- [x] LLM transport resilience (transient backoff retry / permanent fail-fast / 429 cooldown gate)
+- [x] Tool-output protocol (empty-result diagnostics / total disclosure / truncation markers / full-output archive)
+- [x] Attack tree wired into the decision loop (UCB1 advisory) and parallel scan batches
+- [x] Servicization (FastAPI + SSE + approval HTTP bridge + web console), CI, packaging (`pip install -e .`)
+- [x] End-to-end live test ([docs/live-test-report.md](docs/live-test-report.md): real SQLi exploitation, crash resume, graceful shutdown)
+
+Open:
 
 - [ ] Real-LLM drill: swap MockLLM for the real llm_kernel client and measure per-model obedience rates under traps
 - [ ] Extend trap vectors to sqlmap / nmap outputs
 - [ ] Upgrade guard to the L2 cascade (currently the torch-free light config)
 - [ ] Multi-turn context attack defense (currently single-input detection)
-- [ ] Session checkpoint / resume
 
 ## Known Limitations
 
