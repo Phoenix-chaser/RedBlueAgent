@@ -173,8 +173,10 @@ class ReActLoop:
                 self._llm_consecutive_failures += 1
                 fails = self._llm_consecutive_failures
                 note = (
-                    f" [系统注记: LLM 已连续失败 {fails} 次（内核已按退避重试）。"
-                    f"若持续请检查 API 配额/网络后中止，用 --session-id 恢复。]"
+                    f" [系统注记: LLM 服务端连续失败 {fails} 次（系统已自动退避重试），"
+                    f"这是平台侧问题，无法通过任何工具调用解决——请勿尝试任何"
+                    f"「检查网络/配置」类动作，等待系统自动恢复；连续达上限时"
+                    f"系统会中止并保存进度。]"
                     if fails >= 2 else ""
                 )
                 error_thought = f"LLM call failed: {e}"
@@ -233,7 +235,9 @@ class ReActLoop:
                         success=False,
                         error_message=(
                             "REPEATED_ACTION_BLOCKED: 该命令已执行过，禁止重复。"
-                            "请基于已有结果推进分析，或换用不同参数/工具。"),
+                            "下一步（可执行）：换不同参数重发同一工具（如换 ports/url/"
+                            "extensions/level），或换用其他工具推进分析；"
+                            "完全相同的参数会一直被拦截。"),
                     )
                     console.print("[yellow]Repeated action blocked[/yellow]")
                 elif not self.security.validate(action, state):
@@ -241,7 +245,11 @@ class ReActLoop:
                         tool=action.tool or "unknown",
                         command="",
                         success=False,
-                        error_message="BLOCKED by security boundary controller",
+                        error_message=(
+                            "BLOCKED by security boundary: 目标不在授权范围内"
+                            f"（scope: {', '.join(state.scope)}）。下一步（可执行）："
+                            "改用 scope 内的地址/端口重发该工具调用；"
+                            "越界目标不可测试，请勿再尝试。"),
                     )
                     console.print(f"[red]Action BLOCKED by security[/red]")
                 else:
@@ -281,16 +289,21 @@ class ReActLoop:
                     h = hash((sub.tool, json.dumps(sub.params, sort_keys=True, ensure_ascii=False)))
                     if h in self._action_hashes:
                         skips.append(
-                            f"[{sub.tool}] REPEATED_ACTION_BLOCKED: 该命令已执行过，"
-                            f"请基于已有结果推进或换用不同参数。")
+                            f"[{sub.tool}] REPEATED_ACTION_BLOCKED: 该子动作已执行过。"
+                            f"下一步（可执行）：换不同参数（ports/url/extensions/level）"
+                            f"后单独重发。")
                         continue
                     # 危险动作不允许并行：审批必须逐个走，不给批量放行的口子
                     if self.security.approval_gate.is_dangerous(sub):
                         skips.append(
-                            f"[{sub.tool}] 危险动作不允许并行执行，请单独发起以走审批流程。")
+                            f"[{sub.tool}] 危险动作不允许并行执行。"
+                            f"下一步（可执行）：将其作为单独的 tool 动作发起，"
+                            f"走审批流程。")
                         continue
                     if not self.security.validate(sub, state):
-                        skips.append(f"[{sub.tool}] BLOCKED by security boundary (scope).")
+                        skips.append(
+                            f"[{sub.tool}] BLOCKED by security boundary: 目标不在授权范围"
+                            f"（scope: {', '.join(state.scope)}）。请改用 scope 内地址。")
                         continue
                     self._action_hashes.add(h)
                     sub_actions.append(sub)

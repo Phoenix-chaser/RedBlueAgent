@@ -39,11 +39,17 @@ class BaseTool(ABC):
         error_msg = None
 
         if raw.returncode == -2:
-            # Tool not found — no output to parse
-            error_msg = raw.stderr
+            # Tool not found — no output to parse（给 LLM 可执行的替代路径）
+            error_msg = (
+                f"Tool '{self.name}' 不可用（未安装或不在 PATH）。"
+                f"下一步（可执行）：改用其他已安装工具完成该步骤。"
+                f"原始错误: {raw.stderr[:200]}")
         else:
             if raw.timed_out:
-                error_msg = f"Tool '{self.name}' timed out after {self.timeout}s"
+                error_msg = (
+                    f"Tool '{self.name}' timed out after {self.timeout}s。"
+                    f"下一步（可执行）：缩小参数范围重发（如 nmap 换更少 ports、"
+                    f"dirsearch 换更短 extensions）；原参数会被重复检测拦截。")
             elif raw.returncode not in (0, 1):  # sqlmap returns 1 on findings
                 error_msg = raw.stderr[:500] if raw.stderr else None
 

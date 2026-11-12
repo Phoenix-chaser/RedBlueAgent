@@ -361,6 +361,21 @@ Open:
 3. Detector training data is template-constructed: it covers common attack patterns but not the real attack distribution; conclusions should be read as controlled comparisons;
 4. Indirect-injection defense is one layer of defense-in-depth and does not replace system-prompt hardening or output filtering.
 
+## References
+
+Selected designs in this project are grounded in public literature (markers [1][2] in the text):
+
+- [1] *MCP Error Messages Written for Developers Hurt the Most Capable Agents Most.* arXiv:2609.35381, 2026 — rules for tool-error feedback: every "next step" must name a callable tool (rewrites lift recovery to 84–88%; counter-intuitively, stronger models lose more from non-executable steps).
+- [2] *Defending Against Indirect Prompt Injection Attacks With Spotlighting.* arXiv:2403.14720, 2024 — UNTRUSTED delimiters around tool output plus a system-prompt declaration (delimiting variant; reported ASR 50%→2%), as a second layer behind ContextGuard quarantine.
+
+Independent works converging on mechanisms this project already ships:
+
+- Goal-Autopilot (arXiv:2606.11688) — precondition-gated FSM (our PTES stage machine)
+- TapeAgents (arXiv:2412.08445) — replayable structured logs (our WAL event journal / crash resume)
+- Passing the Test You Trained On (arXiv:2610.03448) — contamination-proof detector evaluation with FPR constraints (our template-disjoint split)
+- Indirect Prompt Injections: Are Firewalls All You Need? (arXiv:2510.05244, NeurIPS 2025) — agent-tool boundary output firewalls (ContextGuard's positioning)
+- EnIGMA (arXiv:2409.16165, ICML 2025) — wrapping interactive security tools (our dual param/output interpreters)
+
 ## Acknowledgments & Disclaimer
 
 This project evolved from the undergraduate thesis project PentestAgent. The core modules (ReAct engine, tool interpreters, security boundary, context management) are the original design; the red-blue fusion layer (context guard, detector, attack-defense drill) extends on top of them.

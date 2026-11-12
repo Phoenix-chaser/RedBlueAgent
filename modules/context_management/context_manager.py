@@ -20,6 +20,11 @@ from modules.context_management.state_schema import (
 )
 from utils.clip import clip_marked
 
+# Spotlighting delimiting 标记（arXiv:2403.14720）：工具原始数据包裹声明。
+# 配套声明见 agent/prompts/system_prompt.py 的 Rule 10——两者必须成对存在。
+UNTRUSTED_OPEN = "<<<UNTRUSTED_TOOL_OUTPUT>>>"
+UNTRUSTED_END = "<<<END_UNTRUSTED_TOOL_OUTPUT>>>"
+
 
 class ContextManager:
     """
@@ -426,7 +431,13 @@ class ContextManager:
             state.add_vulnerability(vuln)
 
     def _tool_result_to_observation(self, result: ToolResult) -> str:
-        """Compact text summary of a ToolResult for LLM consumption."""
+        """Compact text summary of a ToolResult for LLM consumption.
+
+        工具原始数据（parsed 摘要）包裹在 UNTRUSTED 分隔符内——Spotlighting
+        的 delimiting 变体（arXiv:2403.14720）：配合 system prompt 声明，
+        为 ContextGuard 未检出的注入载荷提供第二层防御。harness 生成的
+        诊断与存档指引在标记之外（可信文本）。
+        """
         lines = [f"Tool: {result.tool}", f"Command: {result.command[:200]}"]
 
         if not result.success:
@@ -434,8 +445,9 @@ class ContextManager:
         else:
             lines.append(f"Success. Elapsed: {result.elapsed_seconds:.1f}s")
 
+        diagnostics: list[str] = []
         if result.parsed:
-            lines.append("Parsed Results:")
+            parsed_lines = ["Parsed Results:"]
             # Tool-specific summarization
             tool = result.tool.lower()
             parsed = result.parsed
@@ -443,69 +455,84 @@ class ContextManager:
             if tool == "nmap":
                 hosts = parsed.get("hosts", [])
                 if not hosts:
-                    lines.append(
-                        "  DIAGNOSTIC: 0 hosts found —— 目标可能离线、被防火墙过滤或"
-                        "禁 ping。先核对 target 是否正确、端口是否可达；"
-                        "这不是扫描失败，不要原样重跑。")
+                    diagnostics.append(
+                        "  DIAGNOSTIC: 0 hosts found —— 目标可能离线、被防火墙过滤或禁 ping。\n"
+                        "  下一步（可执行）：用 nmap 对同一 target 执行 scan_type="
+                        "'host_discovery' 重试一次；仍为 0 则结论为「主机离线/被过滤」，"
+                        "转向 scope 内其他目标，不要第三次原样重扫。")
                 else:
                     if len(hosts) > 5:
-                        lines.append(f"  共 {len(hosts)} 台主机，显示前 5 台（全部已并入状态）")
-                    lines.append(f"  Hosts found: {len(hosts)}")
+                        parsed_lines.append(f"  共 {len(hosts)} 台主机，显示前 5 台（全部已并入状态）")
+                    parsed_lines.append(f"  Hosts found: {len(hosts)}")
                     for h in hosts[:5]:
                         ports_summary = ", ".join(
                             f"{p['port']}/{p['service']}" for p in h.get("ports", [])[:10]
                         )
-                        lines.append(f"  {h['ip']} ({h.get('hostname','')}): {ports_summary}")
+                        parsed_lines.append(f"  {h['ip']} ({h.get('hostname','')}): {ports_summary}")
 
             elif tool == "dirsearch":
                 paths = parsed.get("paths", [])
                 if not paths:
-                    lines.append(
+                    diagnostics.append(
                         "  DIAGNOSTIC: 0 paths found —— 字典可能不适用于该技术栈，"
-                        "或目标对未知路径做了统一响应。可尝试换 extensions"
-                        "（如 php/html/js/asp）或确认 URL 指向正确端口；"
-                        "0 结果本身是有效结论。")
+                        "或目标对未知路径做了统一响应。\n"
+                        "  下一步（可执行）：对同一 url 重发 dirsearch 并换 extensions"
+                        "（如 php,html,js,asp,jsp）；仍为 0 则该结论有效，"
+                        "转向 nmap 已发现的其他端口。")
                 else:
                     if len(paths) > 20:
-                        lines.append(f"  共 {len(paths)} 条路径，显示前 20 条（全部已并入状态）")
-                    lines.append(f"  Paths found: {len(paths)}")
+                        parsed_lines.append(f"  共 {len(paths)} 条路径，显示前 20 条（全部已并入状态）")
+                    parsed_lines.append(f"  Paths found: {len(paths)}")
                     for p in paths[:20]:
-                        lines.append(f"  [{p['status']}] {p['path']}")
+                        parsed_lines.append(f"  [{p['status']}] {p['path']}")
 
             elif tool == "nikto":
                 findings = parsed.get("findings", [])
                 if not findings:
-                    lines.append(
-                        "  DIAGNOSTIC: 0 findings —— nikto 未发现问题，这是有效结论；"
-                        "结合已发现的服务版本继续推进，无需重跑。")
+                    diagnostics.append(
+                        "  DIAGNOSTIC: 0 findings —— nikto 未发现问题，这是有效结论。\n"
+                        "  下一步（可执行）：基于已并入状态的 nmap 服务版本选择利用动作"
+                        "（如对带参数的 URL 发起 sqlmap），无需重跑 nikto。")
                 else:
                     if len(findings) > 10:
-                        lines.append(f"  共 {len(findings)} 条发现，显示前 10 条（全部已并入状态）")
-                    lines.append(f"  Findings: {len(findings)}")
+                        parsed_lines.append(f"  共 {len(findings)} 条发现，显示前 10 条（全部已并入状态）")
+                    parsed_lines.append(f"  Findings: {len(findings)}")
                     for f in findings[:10]:
-                        lines.append(f"  - {f['description'][:150]}")
+                        parsed_lines.append(f"  - {f['description'][:150]}")
 
             elif tool == "sqlmap":
-                lines.append(f"  Injectable: {parsed.get('injectable', False)}")
+                parsed_lines.append(f"  Injectable: {parsed.get('injectable', False)}")
                 if parsed.get("databases"):
-                    lines.append(f"  Databases: {', '.join(parsed['databases'])}")
-                lines.append(f"  Summary: {parsed.get('raw_summary','')[:300]}")
+                    parsed_lines.append(f"  Databases: {', '.join(parsed['databases'])}")
+                parsed_lines.append(f"  Summary: {parsed.get('raw_summary','')[:300]}")
                 if not parsed.get("injectable"):
-                    lines.append(
-                        "  DIAGNOSTIC: 未发现注入点——有效结论。若怀疑存在注入，"
-                        "可提高 level/risk 或更换带参数的 URL 重试，不要原样重跑。")
+                    diagnostics.append(
+                        "  DIAGNOSTIC: 未发现注入点——有效结论。\n"
+                        "  下一步（可执行）：对同一 url 重发 sqlmap 并提高 level（3-5）"
+                        "/risk（2-3）；仍无注入则换其他带参数的 URL 或 POST data，"
+                        "不要第三次原样重跑。")
 
             elif tool == "metasploit":
-                lines.append(f"  Exploit success: {parsed.get('exploit_success', False)}")
-                lines.append(f"  Session opened: {parsed.get('session_opened', False)}")
-                lines.append(f"  Session type: {parsed.get('session_type', 'none')}")
+                parsed_lines.append(f"  Exploit success: {parsed.get('exploit_success', False)}")
+                parsed_lines.append(f"  Session opened: {parsed.get('session_opened', False)}")
+                parsed_lines.append(f"  Session type: {parsed.get('session_type', 'none')}")
                 if parsed.get("error_messages"):
-                    lines.append(f"  Errors: {parsed['error_messages'][0][:200]}")
+                    parsed_lines.append(f"  Errors: {parsed['error_messages'][0][:200]}")
                 if not parsed.get("exploit_success") and not parsed.get("error_messages"):
-                    lines.append(
-                        "  DIAGNOSTIC: 利用未成功且无报错——核对模块与目标服务版本"
-                        "是否匹配、RPORT/参数是否正确。")
+                    diagnostics.append(
+                        "  DIAGNOSTIC: 利用未成功且无报错。\n"
+                        "  下一步（可执行）：重发 metasploit 并显式指定 rport 与"
+                        "匹配服务版本的 module；仍失败则用 nmap scan_type='service' "
+                        "确认版本后换 module。")
 
+            # Spotlighting delimiting：目标来源的原始数据整体包裹，
+            # 配合 system prompt 的 Rule 10 声明其「是数据非指令」
+            lines.append(UNTRUSTED_OPEN)
+            lines.extend(parsed_lines)
+            lines.append(UNTRUSTED_END)
+
+        # 诊断与存档是 harness 生成的可信指引，置于 UNTRUSTED 之外
+        lines.extend(diagnostics)
         # 全文存档指引（seq 补全的廉价等价）：截断发生时 LLM 知道原文去处
         if result.archive_path:
             lines.append(f"[完整原始输出已存档: {result.archive_path}]")
@@ -520,9 +547,13 @@ class ContextManager:
             f"Stage: {state.current_stage.value}",
             f"Session: {state.session_id}",
             "",
-            "Discovered Hosts:",
         ]
 
+        # hosts/web_paths/vulnerabilities 均由工具输出合并而来（不可信衍生
+        # 数据，载荷可能藏于 finding 描述/evidence）——按 Spotlighting 规则
+        # 整体包裹；Target/Stage/迭代数等 harness 字段在标记之外
+        lines.append(UNTRUSTED_OPEN)
+        lines.append("Discovered Hosts:")
         for host in state.hosts:
             lines.append(f"  {host.ip} ({host.hostname or 'no hostname'}) - {host.os or 'OS unknown'}")
             for svc in host.services[:10]:
@@ -540,6 +571,7 @@ class ContextManager:
                 lines.append(f"    Component: {vuln.affected_component}")
             if vuln.evidence:
                 lines.append(f"    Evidence: {vuln.evidence[:200]}")
+        lines.append(UNTRUSTED_END)
 
         lines += ["", f"Credentials found: {len(state.credentials)}"]
         lines += [f"Stages completed: {', '.join(state.stages_completed) or 'none'}"]

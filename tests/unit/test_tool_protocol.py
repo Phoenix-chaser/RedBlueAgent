@@ -51,7 +51,7 @@ def test_sqlmap_not_injectable_gets_guidance():
         tool="sqlmap", command="sqlmap -u http://t/?id=1", success=True,
         parsed={"injectable": False, "raw_summary": "all tested params unexploitable"}))
     assert "DIAGNOSTIC" in obs
-    assert "level/risk" in obs
+    assert "level" in obs and "risk" in obs and "下一步（可执行）" in obs
 
 
 def test_metasploit_failed_silently_gets_hint():

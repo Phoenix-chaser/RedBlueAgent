@@ -85,7 +85,7 @@ LLM 驱动的自动化渗透测试 Agent（红队）+ 提示注入攻击检测�
 **红队（主目录）——自动化渗透引擎**
 - ReAct 范式 × PTES 七阶段状态机（目标确认→信息收集→漏洞扫描→漏洞分析→漏洞利用→后渗透→报告），阶段推进由前置条件自动校验，防卡死强制推进
 - 五类工具统一调度：nmap / nikto / dirsearch / sqlmap / metasploit
-- **参数解释器 + 输出解释器双层**：LLM 松散参数（URL 当 IP、布尔写成字符串）归一化为合法命令行（含 nmap 脚本白名单防幻觉）；nmap XML / dirsearch·nikto JSON / sqlmap 文本解析为结构化数据，非法参数生成可读错误回喂 LLM
+- **参数解释器 + 输出解释器双层**：LLM 松散参数（URL 当 IP、布尔写成字符串）归一化为合法命令行（含 nmap 脚本白名单防幻觉）；nmap XML / dirsearch·nikto JSON / sqlmap 文本解析为结构化数据，非法参数与错误均生成「指名可调用工具的下一步」回喂 LLM [1]
 - 上下文工程：分层摘要压缩长历史；结果合并时基于 14 类危险服务、13 类开发服务器、15 类敏感路径规则库自动推理漏洞条目，组件前缀去重
 - 多模型适配：DeepSeek / Kimi / 智谱 GLM / Claude / OpenAI，零依赖 LLM 内核直连
 - 可选 RAG：CVE / exploit 知识库增强决策
@@ -97,7 +97,7 @@ LLM 驱动的自动化渗透测试 Agent（红队）+ 提示注入攻击检测�
 
 **融合层（fusion/ + security/context_guard.py）——上下文守卫与演习**
 - ContextGuard 嵌入 ReAct 循环 Act→Observe 检查点，对工具输出做字段级隔离
-- 内容门控：技术标识符（路径、版本号）不送检，只检「自然语言指令形态」文本
+- 内容门控：技术标识符（路径、版本号）不送检，只检「自然语言指令形态」文本；未检出内容再经 Spotlighting 分隔符包裹 [2]
 - 蜜罐感知：会话累计隔离 ≥2 次标记目标疑似蜜罐，写入审计日志
 - 攻防演习：陷阱靶场 + 确定性 MockLLM，量化守卫价值
 
@@ -355,6 +355,21 @@ v0.2 已完成（工程化改造，借鉴 SPECTRE 实践，详见 [docs/optimiza
 2. 陷阱靶场为脚本化输出（不真实执行 nmap 等工具），已覆盖 nikto/dirsearch 两个验证过会流入 LLM 的向量；
 3. 检测器训练数据为模板构造，覆盖常见攻击模式但非真实攻击分布，结论应理解为受控条件下的对比实验；
 4. 间接注入防御是纵深防御的一层，不替代系统提示加固、输出过滤等手段。
+
+## 学术依据（References）
+
+本项目部分设计有公开文献依据（标注形如 [1][2] 见正文）：
+
+- [1] *MCP Error Messages Written for Developers Hurt the Most Capable Agents Most.* arXiv:2609.35381, 2026. —— 错误回喂文案规则：每条「下一步」指向 agent 可调用的工具（改写后恢复率 84-88%；反直觉发现：模型越强越忠实执行不可行动作）。
+- [2] *Defending Against Indirect Prompt Injection Attacks With Spotlighting.* arXiv:2403.14720, 2024. —— 工具输出 UNTRUSTED 分隔符包裹 + system prompt 声明（delimiting 变体；论文报告间接注入 ASR 50%→2%），作为 ContextGuard 检出隔离之外的第二层防御。
+
+以下工作与本项目既有设计互为印证（同类机制、独立结论）：
+
+- Goal-Autopilot（arXiv:2606.11688）—— 前置条件门控 FSM（本项目 PTES 状态机 + 阶段推进校验）
+- TapeAgents（arXiv:2412.08445）—— 结构化日志磁带可恢复（本项目 WAL 事件日志/断点续跑）
+- Passing the Test You Trained On（arXiv:2610.03448）—— 检测器评测防背题与 FPR 约束（本项目模板级不相交划分）
+- Indirect Prompt Injections: Are Firewalls All You Need?（arXiv:2510.05244, NeurIPS 2025）—— agent-工具边界输出防火墙（本项目 ContextGuard 定位）
+- EnIGMA（arXiv:2409.16165, ICML 2025）—— 交互式安全工具封装（本项目参数/输出双层解释器）
 
 ## 致谢与声明
 
