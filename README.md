@@ -87,7 +87,7 @@ LLM 驱动的自动化渗透测试 Agent（红队）+ 提示注入攻击检测�
 - 内置 ATT&CK 式知识库（阶段+上下文条件检索）全阶段驱动攻击树候选，成败回喂按「低层参数错误退一步修正 / 高层方向失败换技术」两级回退 [8][9]
 - 五类工具统一调度：nmap / nikto / dirsearch / sqlmap / metasploit
 - **参数解释器 + 输出解释器双层**：LLM 松散参数（URL 当 IP、布尔写成字符串）归一化为合法命令行（含 nmap 脚本白名单防幻觉）；nmap XML / dirsearch·nikto JSON / sqlmap 文本解析为结构化数据，非法参数与错误均生成「指名可调用工具的下一步」回喂 LLM [1][7]
-- 上下文工程：分层摘要压缩长历史；结果合并时基于 14 类危险服务、13 类开发服务器、15 类敏感路径规则库自动推理漏洞条目，组件前缀去重
+- 上下文工程：分层摘要压缩长历史（CHAP 式结构化 handoff 协议 [11]：targets/findings/attempted/succeeded/next_hypothesis/open_questions 六字段移交，失败尝试与假设不再随对话流丢失）；结果合并时基于 14 类危险服务、13 类开发服务器、15 类敏感路径规则库自动推理漏洞条目，组件前缀去重
 - 多模型适配：DeepSeek / Kimi / 智谱 GLM / Claude / OpenAI，零依赖 LLM 内核直连
 - 可选 RAG：CVE / exploit 知识库增强决策
 
@@ -405,6 +405,9 @@ v0.2 已完成（工程化改造，借鉴 SPECTRE 实践，详见 [docs/optimiza
 [10] RASSUL Y H, RASHID T A. AgentShield[EB/OL]. (2026-05)[2026-11-12]. https://arxiv.org/abs/2605.11026.
 　　→ 蜜标/honeytoken：合法 agent 永不应触碰的诱饵凭证，一旦使用即失陷信号（对应本项目 honeytokens 配置、蜜标访问审计与「响应入污点」闭环）。
 
+[11] VANGELI M, BRYNIELSSON J. Context relay for long-running penetration-testing agents[C]//LAST-X Workshop, co-located with NDSS 2026. San Diego, 2026.
+　　→ 把累积知识压缩为协议化 handoff 移交新 agent 实例（对应本项目 HierarchicalSummarizer 的六字段结构化压缩：过程性知识——失败尝试/假设/开放问题——从对话流提炼为字段）。
+
 <details>
 <summary><b>BibTeX（点击展开复制）</b></summary>
 
@@ -478,6 +481,14 @@ v0.2 已完成（工程化改造，借鉴 SPECTRE 实践，详见 [docs/optimiza
   title   = {AgentShield},
   journal = {arXiv preprint arXiv:2605.11026},
   year    = {2026}
+}
+
+@inproceedings{vangeli2026chap,
+  author    = {Vangeli, Marius and Brynielsson, Joel},
+  title     = {Context Relay for Long-Running Penetration-Testing Agents},
+  booktitle = {LAST-X Workshop, co-located with the Network and Distributed System Security Symposium (NDSS)},
+  year      = {2026},
+  address   = {San Diego, CA}
 }
 ```
 

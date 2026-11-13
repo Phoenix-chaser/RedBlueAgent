@@ -93,7 +93,7 @@ The inbound threat is real and specific: **the target of a pentest is by nature 
 - Built-in ATT&CK-style knowledge base (stage + context-conditional retrieval) drives attack-tree candidates across all stages, with failure-aware two-level backtracking (low-level param errors step back and retry; high-level failures switch technique) [8][9]
 - Five tools under unified dispatch: nmap / nikto / dirsearch / sqlmap / metasploit
 - **Dual-layer tool interpreters**: loose LLM parameters (URL-as-IP, booleans-as-strings) are normalized into legal command lines (with an nmap script whitelist against hallucination); nmap XML / dirsearch·nikto JSON / sqlmap text are parsed into structured data; illegal parameters and errors produce "next steps that name a callable tool" fed back to the LLM [1][7]
-- Context engineering: hierarchical summarization for long histories; result merging auto-infers vulnerability entries via rule bases (14 dangerous services, 13 dev-server signatures, 15 sensitive paths) with component-prefix dedup
+- Context engineering: hierarchical summarization for long histories; result merging auto-infers vulnerability entries via rule bases (14 dangerous services, 13 dev-server signatures, 15 sensitive paths) with component-prefix dedup (CHAP-style structured handoff protocol [11]: six fields — targets/findings/attempted/succeeded/next_hypothesis/open_questions — so failed attempts and hypotheses survive compression)
 - Multi-model support: DeepSeek / Kimi / Zhipu GLM / Claude / OpenAI via a zero-dependency LLM kernel
 - Optional RAG: CVE / exploit knowledge base for decision enhancement
 
@@ -397,6 +397,8 @@ Inline markers [n] in the text point to the entries below (arXiv preprints liste
 
 [10] Y. H. Rassul and T. A. Rashid, "AgentShield," arXiv:2605.11026, 2026. — honeytokens: decoy credentials a legitimate agent should never touch; use signals compromise (our honeytokens config, visit auditing, and the response-into-taint closed loop).
 
+[11] M. Vangeli and J. Brynielsson, "Context Relay for Long-Running Penetration-Testing Agents," in LAST-X Workshop (NDSS 2026), San Diego, 2026. — compress accumulated knowledge into protocolized handoffs for fresh agent instances (our HierarchicalSummarizer's six-field structured compression: procedural knowledge — failed attempts, hypotheses, open questions — distilled from the conversation flow).
+
 <details>
 <summary><b>BibTeX (click to expand)</b></summary>
 
@@ -470,6 +472,14 @@ Inline markers [n] in the text point to the entries below (arXiv preprints liste
   title   = {AgentShield},
   journal = {arXiv preprint arXiv:2605.11026},
   year    = {2026}
+}
+
+@inproceedings{vangeli2026chap,
+  author    = {Vangeli, Marius and Brynielsson, Joel},
+  title     = {Context Relay for Long-Running Penetration-Testing Agents},
+  booktitle = {LAST-X Workshop, co-located with the Network and Distributed System Security Symposium (NDSS)},
+  year      = {2026},
+  address   = {San Diego, CA}
 }
 ```
 
