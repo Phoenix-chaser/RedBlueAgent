@@ -1,15 +1,17 @@
-# Agent 运行镜像：Ubuntu 基座 + 渗透工具 + 本项目
-# 用途: 在无 Kali 的机器上做全链路实测（Agent 与靶场同网络）
+# RedBlueAgent Agent 运行镜像（生产版）
+# 用途: 在无 Kali 的机器上运行完整 Agent + API 服务
 #
 # 构建（在仓库根目录；--network host 让 apt/pip 走宿主代理）:
-#   docker build -f docker/Dockerfile.agent -t redblueagent:live --network host \
+#   docker build -f docker/Dockerfile.agent -t redblueagent:latest --network host \
 #     --build-arg http_proxy=http://127.0.0.1:7890 \
 #     --build-arg https_proxy=http://127.0.0.1:7890 .
 #
-# 运行（加入靶场网络 pentest_net，会话数据落宿主 data/）:
-#   docker run -d --name pentest-agent \
-#     --network docker_pentest_net \
-#     -v $PWD/data:/app/data --env-file .env redblueagent:live
+# 生产部署（推荐）:
+#   cd docker && docker compose -f docker-compose.prod.yml up -d
+#
+# 手工运行:
+#   docker run -d --name redblue-agent --network docker_pentest_net \
+#     -p 8095:8095 -v $PWD/data:/app/data --env-file .env redblueagent:latest
 #
 # 说明: metasploit 未装入（体积考虑）——agent 调用时走 FileNotFoundError
 # 错误回喂路径，该路径本身是实测项之一。
@@ -19,15 +21,36 @@ ARG http_proxy
 ARG https_proxy
 ENV DEBIAN_FRONTEND=noninteractive
 
+# 系统依赖 + 安全工具 + curl（healthcheck 用）
 RUN apt-get update && apt-get install -y --no-install-recommends \
       python3 python3-pip nmap nikto sqlmap curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-COPY . .
 
-# 项目本体 + server extras（fastapi/uvicorn）+ dirsearch（pypi 版，apt 无此包）
-RUN pip3 install --break-system-packages -e ".[server]" dirsearch
+# 层缓存优化：先拷依赖描述 + 核心包结构，pip install 只在这些不变时缓存
+COPY pyproject.toml .
+COPY agent/ agent/
+COPY modules/ modules/
+COPY security/ security/
+COPY utils/ utils/
+COPY fusion/ fusion/
+COPY scripts/ scripts/
+COPY server/ server/
+COPY blueteam/src/ blueteam/src/
 
-# 常驻容器，实测步骤由 docker exec 驱动
-CMD ["sleep", "infinity"]
+RUN pip3 install --break-system-packages -e ".[server]" dirsearch \
+    && pip3 install --break-system-packages scikit-learn jieba joblib || true
+
+# 配置文件（guardrails.yaml 可通过 volume 挂载覆盖）
+COPY config.yaml guardrails.yaml ./
+
+# 非 root 用户
+RUN chown -R nobody:nogroup /app
+USER nobody
+
+EXPOSE 8095
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 --start-period=20s \
+  CMD curl -f http://localhost:8095/health || exit 1
+
+CMD ["python3", "scripts/serve.py", "--host", "0.0.0.0"]

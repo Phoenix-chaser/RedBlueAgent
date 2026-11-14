@@ -58,3 +58,11 @@ context_guard:
   strict: false               # true = refuse to start when the blueteam model fails to load
   use_l2: false               # true = L2 级联（L1 落决策带才升级堆叠裁决；需 torch，
                              # 失败自动回退 L1；带参数来自 blueteam/results/cascade.json）
+
+# 生产服务配置（scripts/serve.py 消费）
+server:
+  max_concurrent_sessions: 3       # 并发会话上限（ThreadPoolExecutor）
+  validation_interval_seconds: 300 # 持续验证循环间隔
+  validation_detection_threshold: 0.8  # 检出率低于此值 → degraded
+  validation_fpr_threshold: 0.05   # 误报率高于此值 → degraded
+  graceful_shutdown_timeout: 60    # 优雅停机等待活跃会话的超时（秒）

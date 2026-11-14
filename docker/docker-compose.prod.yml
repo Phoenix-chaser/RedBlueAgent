@@ -1,0 +1,90 @@
+version: "3.8"
+
+# =============================================================================
+# RedBlueAgent 生产编排——一条命令启动完整服务
+#
+# 启动: docker compose -f docker-compose.prod.yml up -d
+# 验证: curl http://localhost:8095/health
+# 控制台: 浏览器打开 http://localhost:8095/
+#
+# 前提: 项目根有 .env（含 REDBLUEAGENT_TOKEN 和 LLM API Key）
+# =============================================================================
+
+services:
+  # ── Agent 服务（首次作为 compose 服务，替代手工 docker run）──────
+  agent:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.agent
+    command: ["python3", "scripts/serve.py", "--host", "0.0.0.0"]
+    ports:
+      - "8095:8095"
+    environment:
+      REDBLUEAGENT_TOKEN: ${REDBLUEAGENT_TOKEN:?Set REDBLUEAGENT_TOKEN in .env}
+      REDBLUEAGENT_HOST: "0.0.0.0"
+      REDBLUEAGENT_MAX_CONCURRENT: "3"
+    volumes:
+      - agent_data:/app/data
+      - ../.env:/app/.env:ro
+      - ../guardrails.yaml:/app/guardrails.yaml:ro
+    networks:
+      pentest_net:
+        ipv4_address: 172.20.0.2
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8095/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+    depends_on:
+      target:
+        condition: service_healthy
+
+  # ── 靶场（★☆☆ 入门）────────────────────────────────────────────
+  target:
+    build:
+      context: ./targets
+      dockerfile: Dockerfile.target
+    ports:
+      - "8080:5000"
+    networks:
+      pentest_net:
+        ipv4_address: 172.20.0.10
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # ── Juice Shop（★★★ 高难度，profile: hard）─────────────────────
+  juice-shop:
+    image: bkimminich/juice-shop:latest
+    ports:
+      - "3000:3000"
+    networks:
+      pentest_net:
+        ipv4_address: 172.20.0.13
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:3000/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    profiles:
+      - hard
+      - all
+
+volumes:
+  agent_data:
+    driver: local
+
+networks:
+  pentest_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24

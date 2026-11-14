@@ -66,7 +66,7 @@ def test_token_grants_access(tmp_path):
 def test_list_sessions(tmp_path):
     client = make_client(tmp_path, sessions={"s1": seed_events(), "s2": seed_events()})
     r = client.get("/api/sessions", headers=auth(client))
-    assert r.json() == {"sessions": ["s1", "s2"]}
+    assert [s["session_id"] for s in r.json()["sessions"]] == ["s1", "s2"]
 
 
 def test_unknown_session_events_404(tmp_path):
