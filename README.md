@@ -390,9 +390,13 @@ v0.3.2 已完成（三个开放项，2026-11-14）：
       - 会话级聚合评分：多字段各出亚阈值分（0.3-0.5）但累计远超阈值
         → SESSION_AGGREGATE_PRESSURE 审计告警（不隔离，交蜜罐计数跟进）
 
-仍开放：
+v0.3.3（最后一个开放项）：
 
-- [ ] 语义累积防御的 LLM-as-judge 扩展（规则聚合覆盖施压，不覆盖语义推理链）
+- [x] 语义累积 LLM-as-judge（`security/semantic_judge.py`）：收集亚阈值可疑内容
+      （检测分在阈值 40%-100% 之间），每 N 条调用 LLM 判定是否构成「协同注入攻击」
+      ——覆盖规则层无法检测的语义推理链（逐轮建立信任 → 最终诱导放弃任务）。
+      config `security.llm_judge: true` 启用（默认关，复用已配置 LLM，LLM 失败
+      自动降级为不告警不阻断）。审计事件 `SEMANTIC_ACCUMULATION_ALERT`。
 
 ## 已知局限
 

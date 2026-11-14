@@ -162,7 +162,22 @@ class PentestAgent:
             max_stage_iterations=agent_cfg.get("max_stage_iterations", 30),
             taint_policy=security_cfg.get("taint_policy", "block"),
             honeytokens=security_cfg.get("honeytokens", []),
+            semantic_judge=self._build_semantic_judge(security_cfg),
         )
+
+    def _build_semantic_judge(self, security_cfg: dict):
+        """语义累积 LLM-as-judge（可选）。config security.llm_judge: true
+        启用；复用已配置的 LLM 客户端，不额外创建连接。"""
+        if not security_cfg.get("llm_judge", False):
+            return None
+        try:
+            from security.semantic_judge import SemanticJudge
+            return SemanticJudge(
+                self.llm,
+                judge_interval=int(security_cfg.get("llm_judge_interval", 5)))
+        except Exception as e:
+            print(f"[SemanticJudge] 初始化失败（不阻断主流程）: {e}")
+            return None
 
     def _sessions_dir(self) -> Path:
         return Path(self.config.get("storage", {}).get("sessions_dir", "data/sessions"))

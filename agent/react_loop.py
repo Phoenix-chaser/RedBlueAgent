@@ -64,6 +64,7 @@ class ReActLoop:
         attack_tree: AttackTree | None = None,
         taint_policy: str = "block",
         honeytokens: list[str] | None = None,
+        semantic_judge=None,
     ):
         self.llm = llm
         self.invoker = invoker
@@ -92,6 +93,9 @@ class ReActLoop:
         # 蜜标清单（AgentShield [10]）：合法测试永不需要访问的路径片段；
         # 访问即审计告警，其响应自动登记为污点——后续「使用」蜜标内容将被 ⑥ 拦截
         self.honeytokens = list(honeytokens or [])
+        # 语义累积 LLM-as-judge（可选，config context_guard.llm_judge: true 启用）：
+        # 规则层（拼接+聚合）覆盖施压模式，LLM-as-judge 覆盖语义推理链攻击
+        self.semantic_judge = semantic_judge
         # Caches to avoid recomputing unchanged context on every iteration
         self._rag_cache: tuple[frozenset, str] = (frozenset, "")  # (service_keys, context)
 
@@ -399,6 +403,23 @@ class ReActLoop:
                         # 蓝队守卫：工具输出进 LLM 上下文前的隔离检查点
                         if self.context_guard is not None and isinstance(observation, ToolResult):
                             observation = self.context_guard.guard_observation(observation)
+                            # 语义累积 LLM-as-judge：收集亚阈值内容，达到
+                            # interval 时由 LLM 判定是否构成协同攻击
+                            if self.semantic_judge is not None:
+                                self.semantic_judge.observe(
+                                    str(observation.parsed)[:200],
+                                    self.context_guard._agg_score
+                                    / max(self.context_guard._agg_fields, 1),
+                                    self.context_guard.threshold)
+                                if self.semantic_judge.should_judge():
+                                    jr = self.semantic_judge.judge()
+                                    if jr and jr.is_coordinated_attack:
+                                        self._audit_guard(dict(
+                                            event="SEMANTIC_ACCUMULATION_ALERT",
+                                            confidence=round(jr.confidence, 2),
+                                            reasoning=jr.reasoning[:200],
+                                            note="LLM 判定多条观察构成协同注入攻击"
+                                                 "（规则层未检出的语义推理链）"))
                         if honey and isinstance(observation, ToolResult) and observation.success:
                             blob = observation.raw_stdout[:2000] or json.dumps(
                                 observation.parsed, ensure_ascii=False, default=str)[:2000]
