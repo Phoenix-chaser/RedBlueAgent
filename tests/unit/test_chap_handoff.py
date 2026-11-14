@@ -96,3 +96,13 @@ def test_multiple_chunks_accumulate():
             action_params={"target": "192.168.1.100"}, observation="✓ 完成"))
     s2 = summ.summarize_if_needed(s)
     assert len(s2.summary_chunks) >= 2
+
+
+def test_compression_triggers_on_any_iteration_once_over_budget():
+    """实测发现（2026-11-14 会话）：旧「每 10 轮」检查点与预算解耦，
+    9 轮未超标 + 之后膨胀 → finish 都不压。新行为：任一轮超预算即压。"""
+    llm = CaptureLLM(GOOD)
+    summ = HierarchicalSummarizer(llm=llm, keep_recent=8, token_budget=1)
+    s = make_state(n_turns=10)   # 任意轮次，仅超预算
+    s2 = summ.summarize_if_needed(s)
+    assert len(s2.summary_chunks) == 1 and len(s2.llm_turns) == 8

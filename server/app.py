@@ -48,7 +48,7 @@ def create_app(
     sessions_dir = Path(sessions_dir)
     token = token if token is not None else os.getenv("PENTESTAGENT_TOKEN", "")
 
-    app = FastAPI(title="PentestAgent", version="0.2.0")
+    app = FastAPI(title="PentestAgent", version="0.3.0")
 
     def require_token(request: Request) -> None:
         if token == "":

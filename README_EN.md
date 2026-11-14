@@ -358,6 +358,13 @@ Done in v0.2 (engineering overhaul informed by SPECTRE practices — see [docs/o
 - [x] Servicization (FastAPI + SSE + approval HTTP bridge + web console), CI, packaging (`pip install -e .`)
 - [x] End-to-end live test ([docs/live-test-report.md](docs/live-test-report.md): real SQLi exploitation, crash resume, graceful shutdown)
 
+Done in v0.3 (paper-informed; citations in References [1]-[11]):
+
+- [x] Executable tool-error feedback [1], Spotlighting delimiters on both untrusted entry points [2], ATT&CK-KB-driven attack tree with two-level backtracking [8][9]
+- [x] Differential-replay evaluation on real tool outputs + domain adaptation (deployment FPR 12.05%→0%) [5]
+- [x] Taint tracking (minimal CaMeL) [6], honeytoken defense line (AgentShield) [10], semantic endpoint budget (live-test finding)
+- [x] CHAP-style structured handoff compression [11]
+
 Open:
 
 - [ ] Real-LLM drill: swap MockLLM for the real llm_kernel client and measure per-model obedience rates under traps

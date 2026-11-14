@@ -566,9 +566,11 @@ class ReActLoop:
                                        "iteration": state.total_iterations, "forced": False})
                 _checkpoint()
 
-            # Periodic summarization + checkpoint
-            if iteration % 10 == 9:
-                state = self.summarizer.summarize_if_needed(state)
+            # CHAP 压缩：每轮按预算检查（实测发现「每 10 轮」检查点与预算
+            # 条件解耦——iteration 9 未超标、后续膨胀到 finish 都不会再压，
+            # 9694 token 超预算 6000 仍未触发；summarize_if_needed 开头即
+            # 按预算短路，每轮调用的开销可忽略）
+            state = self.summarizer.summarize_if_needed(state)
             if iteration % 20 == 19:
                 _checkpoint()
 

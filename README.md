@@ -353,6 +353,13 @@ v0.2 已完成（工程化改造，借鉴 SPECTRE 实践，详见 [docs/optimiza
 - [x] 服务化（FastAPI + SSE + 审批 HTTP 桥 + Web 控制台）、CI、打包（pip install -e .）
 - [x] 全链路实测（[docs/live-test-report.md](docs/live-test-report.md)：真实 SQLi 利用、崩溃恢复、优雅停机）
 
+v0.3 已完成（论文驱动优化，引用见 References [1]-[11]）：
+
+- [x] 错误回喂可执行化 [1]、Spotlighting 输入标记双入口 [2]、ATT&CK 知识库驱动攻击树 + 两级回退 [8][9]
+- [x] 真实工具输出差分重放评测 + 领域适配（部署域 FPR 12.05%→0%）[5]
+- [x] 污点追踪（CaMeL 最小版）[6]、蜜标防线（AgentShield）[10]、语义级端点预算（实测反哺）
+- [x] CHAP 式结构化 handoff 压缩协议 [11]
+
 待办：
 
 - [ ] 真实 LLM 演习：MockLLM 换接 llm_kernel 真实客户端，测不同模型在陷阱下的实际服从率
