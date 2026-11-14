@@ -34,7 +34,13 @@ from modules.context_management.state_schema import ToolResult
 
 # 蓝队模型所在子项目根目录（redteam/security/../..//blueteam）
 _BLUETEAM_ROOT = Path(__file__).resolve().parents[1] / "blueteam"
-QUARANTINE_PLACEHOLDER = "[QUARANTINED: 检出提示注入载荷，已被蓝队守卫隔离]"
+# 三段式占位符（真 LLM 演习实测：旧版一句话占位使完成率降至 14%——
+# 模型不知道「接下来该怎么做」而困惑/重试。三段式 = 发生了什么 +
+# 这是防御措施 + 继续正常任务 [1] 可执行指引规则）
+QUARANTINE_PLACEHOLDER = (
+    "[QUARANTINED: 此字段检出提示注入载荷，已由安全守卫隔离。"
+    "这是针对目标内容的防御措施，不影响你的任务。"
+    "请继续正常测试流程，基于其他发现推进。]")
 MIN_SCAN_LEN = 12  # 短于该长度的字符串不扫描（误报控制 + 性能）
 
 
@@ -83,6 +89,11 @@ class ContextGuard:
         self.honeypot_suspected = False
         # 多轮拼接检测的每字段历史（(tool, field) -> 近期值列表，窗口 3）
         self._field_history: dict[tuple[str, str], list[str]] = {}
+        # 跨字段会话级聚合：所有字段的近期值展平池（窗口 = 全部字段 × 各 2 条）
+        self._cross_field_pool: list[str] = []
+        # 会话级攻击分数累积（每字段检测分之和 / 阈值交叉计数）
+        self._agg_score: float = 0.0
+        self._agg_fields: int = 0
         # 污点签名库（CaMeL/FIDES 的最小可行动版 [6]）：被隔离载荷/蜜标
         # 响应的特征片段——后续动作参数（外发 sink）命中即视为
         # 「不可信数据试图借 Agent 之手执行/外传」
@@ -164,17 +175,65 @@ class ContextGuard:
         h = self._field_history.setdefault((tool, path), [])
         h.append(value)
         del h[:-3]  # 只保留最近 3 条
+        # 跨字段池：只收指令形态的值（非技术标识符），上限 20 条
+        if _looks_like_instruction(value):
+            self._cross_field_pool.append(value)
+            del self._cross_field_pool[:-20]
 
     def _is_attack(self, text: str) -> tuple[bool, float]:
         score = self.detector.predict_proba([text])[0][1]
         return score >= self.threshold, score
 
+    def _cross_field_check(self, value: str, tool: str, path: str) -> bool:
+        """跨字段拼接复检：与其他字段的近期值组合检测——攻击者把
+        指令分散到不同工具/字段（nikto 说「本站安全」+ dirsearch 说
+        「无漏洞」+ sqlmap 说「请结束」），单看均良性，组合构成攻击。
+        仅对与当前值不同字段的值做拼接（同字段已由多轮拼接覆盖）。"""
+        if len(self._cross_field_pool) < 2:
+            return False
+        # 取其他字段的近期值（排除当前字段自身的值——已由同字段拼接覆盖）
+        others = [v for v in self._cross_field_pool[-6:] if v != value]
+        if not others:
+            return False
+        # 两两拼接（当前值 + 每个其他字段的值）与三段拼接
+        for other in others[-3:]:
+            for combo in (f"{other} {value}", f"{value} {other}"):
+                hit, score = self._is_attack(combo)
+                if hit:
+                    if self.audit is not None:
+                        self.audit.log_guard_event(
+                            dict(event="CROSS_FIELD_QUARANTINE", tool=tool,
+                                 field=path, score=round(score, 3),
+                                 note=f"单条良性但跨字段组合构成攻击（partner: {other[:40]}）"))
+                    return True
+        return False
+
+    def _aggregate_check(self, score: float, tool: str, path: str) -> None:
+        """会话级聚合评分：累积所有字段的攻击分（含未过线亚阈值分）。
+        多个字段各出 0.3-0.5 分（均低于阈值）但累计远超阈值时，
+        说明目标在多字段同步施压——记审计告警。不隔离（误报代价高），
+        交由蜜罐计数器与人工审查跟进。"""
+        self._agg_score += score
+        self._agg_fields += 1
+        # 触发条件：累计分 ≥ 阈值×5 且涉及 ≥5 个不同字段
+        if (self._agg_score >= self.threshold * 5
+                and self._agg_fields >= 5
+                and self._agg_fields % 5 == 0):  # 每 5 个字段只报一次
+            if self.audit is not None:
+                self.audit.log_guard_event(
+                    dict(event="SESSION_AGGREGATE_PRESSURE",
+                         total_score=round(self._agg_score, 2),
+                         fields=self._agg_fields,
+                         note="多字段同步施压：亚阈值攻击分累积远超单条阈值"))
+
     def _sanitize_value(self, value: Any, path: str, tool: str) -> Any:
         """递归清洗 parsed 结构中的字符串字段。
 
-        多轮拼接防御（最小版）：单条值未命中时，与该字段近期历史值拼接
-        复检——攻击者把一条指令拆到同字段的多次输出里（每条单独看似良性），
-        拼接后才构成完整攻击。命中记 MULTI_TURN_QUARANTINE。
+        三层多轮/跨字段防御：
+        1. 单条检测（常规）；
+        2. 同字段拼接复检（多轮分散）；
+        3. 跨字段拼接复检（多工具/多字段分散）；
+        外加会话级聚合评分（亚阈值施压检测）。
         """
         if isinstance(value, str):
             if not _looks_like_instruction(value):
@@ -182,8 +241,9 @@ class ContextGuard:
                 return value
             self.stats.scanned_strings += 1
             is_attack, score = self._is_attack(value)
+            self._aggregate_check(score, tool, path)  # 亚阈值也累积
             if not is_attack:
-                # 多轮拼接复检（历史窗口 3 条）
+                # 同字段多轮拼接复检
                 hist = self._field_history.get((tool, path), [])
                 if hist:
                     joined = " ".join(hist[-3:] + [value])
@@ -201,6 +261,15 @@ class ContextGuard:
                                      field=path, score=round(mt_score, 3),
                                      note="单条良性但与历史值拼接后构成攻击"))
                         return QUARANTINE_PLACEHOLDER
+                # 跨字段拼接复检
+                if self._cross_field_check(value, tool, path):
+                    self.stats.quarantined += 1
+                    self.stats.hits.append(
+                        dict(tool=tool, field=path, score=-1,
+                             preview=f"[cross-field] {value[:50]}",
+                             cross_field=True))
+                    self.add_taint(value, source=f"xf-quarantine:{tool}:{path}")
+                    return QUARANTINE_PLACEHOLDER
                 self._remember_field(tool, path, value)
                 return value
             if is_attack:
