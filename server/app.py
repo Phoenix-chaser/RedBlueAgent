@@ -46,7 +46,7 @@ def create_app(
     默认惰性构造 PentestAgent（无 LLM Key 时返回 503 可行动错误）。
     """
     sessions_dir = Path(sessions_dir)
-    token = token if token is not None else os.getenv("PENTESTAGENT_TOKEN", "")
+    token = token if token is not None else os.getenv("REDBLUEAGENT_TOKEN") or os.getenv("PENTESTAGENT_TOKEN", "")
 
     app = FastAPI(title="PentestAgent", version="0.3.0")
 

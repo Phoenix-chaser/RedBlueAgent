@@ -3,7 +3,7 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "pentestagent"
+name = "redblueagent"
 version = "0.3.0"
 description = "RedBlueAgent - LLM-driven pentest agent (red team) + prompt-injection detector (blue team) + fusion drills"
 readme = "README.md"
@@ -32,7 +32,7 @@ rag = ["chromadb>=0.4", "sentence-transformers>=2.2"]
 server = ["fastapi>=0.110", "uvicorn>=0.29"]
 
 [project.scripts]
-pentestagent = "scripts.run_agent:main"
+redblueagent = "scripts.run_agent:main"
 
 [tool.setuptools.packages.find]
 include = ["agent*", "modules*", "security*", "utils*", "fusion*", "scripts*", "server*"]

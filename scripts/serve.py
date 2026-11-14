@@ -3,12 +3,12 @@
 serve.py - PentestAgent HTTP 服务入口（P2-3）。
 
 用法:
-    PENTESTAGENT_TOKEN=$(openssl rand -hex 32) python scripts/serve.py
+    REDBLUEAGENT_TOKEN=$(openssl rand -hex 32) python scripts/serve.py
     # 浏览器打开 http://127.0.0.1:8095/ ，右上角填入 Token
 
 环境:
-    PENTESTAGENT_TOKEN  必填（Bearer 认证；缺失时拒绝启动——不裸奔）
-    PENTESTAGENT_HOST/PORT  默认 127.0.0.1:8095（仅本机监听）
+    REDBLUEAGENT_TOKEN  必填（Bearer 认证；缺失时拒绝启动——不裸奔）
+    REDBLUEAGENT_HOST/PORT  默认 127.0.0.1:8095（仅本机监听）
 """
 import os
 import sys
@@ -17,9 +17,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 def main() -> int:
-    token = os.getenv("PENTESTAGENT_TOKEN", "")
+    token = os.getenv("REDBLUEAGENT_TOKEN") or os.getenv("PENTESTAGENT_TOKEN", "")
     if not token or token.startswith("change-me"):
-        print("ERROR: PENTESTAGENT_TOKEN 未设置或为占位值。生成: "
+        print("ERROR: REDBLUEAGENT_TOKEN 未设置或为占位值。生成: "
               "openssl rand -hex 32")
         return 1
 
@@ -29,10 +29,10 @@ def main() -> int:
     from rich.text import Text
     from server.app import create_app
 
-    host = os.getenv("PENTESTAGENT_HOST", "127.0.0.1")
-    port = int(os.getenv("PENTESTAGENT_PORT", "8095"))
+    host = os.getenv("REDBLUEAGENT_HOST") or os.getenv("PENTESTAGENT_HOST", "127.0.0.1")
+    port = int(os.getenv("REDBLUEAGENT_PORT") or os.getenv("PENTESTAGENT_PORT", "8095"))
     app = create_app(
-        sessions_dir=os.getenv("PENTESTAGENT_SESSIONS_DIR", "data/sessions"),
+        sessions_dir=os.getenv("REDBLUEAGENT_SESSIONS_DIR", "data/sessions"),
         token=token,
     )
 
@@ -45,7 +45,7 @@ def main() -> int:
     else:
         banner.append(f"http://{host}:{port}/\n", style="bold green")
     banner.append("三步上手：\n", style="bold")
-    banner.append("  1. 打开控制台，右上角粘贴 Token（本进程的 PENTESTAGENT_TOKEN）\n")
+    banner.append("  1. 打开控制台，右上角粘贴 Token（本进程的 REDBLUEAGENT_TOKEN）\n")
     banner.append("  2. 左上角「目标」填入已授权目标 IP → 开始测试\n")
     banner.append("  3. 实时事件流在中央；危险操作在右侧「待审批」按钮放行/拒绝\n\n")
     banner.append("靶场（另开终端）：\n", style="bold")

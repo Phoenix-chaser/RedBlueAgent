@@ -4,12 +4,12 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)]()
-[![CI](https://github.com/Phoenix-chaser/Pentestagent/actions/workflows/ci.yml/badge.svg)](https://github.com/Phoenix-chaser/Pentestagent/actions/workflows/ci.yml)
+[![CI](https://github.com/Phoenix-chaser/RedBlueAgent/actions/workflows/ci.yml/badge.svg)](https://github.com/Phoenix-chaser/RedBlueAgent/actions/workflows/ci.yml)
 [![Tests](https://img.shields.io/badge/tests-142%20passed-brightgreen.svg)]()
 [![CPU Only](https://img.shields.io/badge/runtime-CPU%20only-informational.svg)]()
 
 LLM 驱动的自动化渗透测试 Agent（红队）+ 提示注入攻击检测器（蓝队）+ 攻防演习闭环。
-项目由本科毕业设计 [PentestAgent](https://github.com/Phoenix-chaser/Pentestagent) 演化而来：在保留原有 ReAct 渗透引擎的基础上，为 Agent 补上了它自己缺失的安全防线。
+项目由本科毕业设计 [PentestAgent](https://github.com/Phoenix-chaser/RedBlueAgent)（本仓库前身） 演化而来：在保留原有 ReAct 渗透引擎的基础上，为 Agent 补上了它自己缺失的安全防线。
 
 > ⚠️ **仅限授权测试环境使用**。只能对你拥有或已获得书面授权的目标使用；未授权的渗透测试在多数司法管辖区属违法行为。
 
@@ -161,8 +161,8 @@ python3 -m src.toolout_bench --sessions-dir ../data/sessions        # 防泄漏�
 **方式一：Kali / Ubuntu 一键安装**
 
 ```bash
-git clone https://github.com/Phoenix-chaser/Pentestagent.git
-cd Pentestagent
+git clone https://github.com/Phoenix-chaser/RedBlueAgent.git
+cd RedBlueAgent
 bash setup_kali.sh
 ```
 
@@ -171,8 +171,8 @@ bash setup_kali.sh
 **方式二：仅跑演习与检测器（无需安全工具、无需 API Key）**
 
 ```bash
-git clone https://github.com/Phoenix-chaser/Pentestagent.git
-cd Pentestagent
+git clone https://github.com/Phoenix-chaser/RedBlueAgent.git
+cd RedBlueAgent
 pip install -r requirements.txt
 ```
 
@@ -226,7 +226,7 @@ LLM_MODEL=deepseek-chat
 **Web 控制台 + 远程审批**：
 
 ```bash
-PENTESTAGENT_TOKEN=$(openssl rand -hex 16) SECURITY_APPROVAL_POLICY=file \
+REDBLUEAGENT_TOKEN=$(openssl rand -hex 16) SECURITY_APPROVAL_POLICY=file \
   python3 scripts/serve.py        # http://127.0.0.1:8095/
 ```
 
@@ -238,9 +238,9 @@ PENTESTAGENT_TOKEN=$(openssl rand -hex 16) SECURITY_APPROVAL_POLICY=file \
 
 ```bash
 cd docker && docker compose up -d target                                   # ① 靶场
-docker build -f docker/Dockerfile.agent -t pentestagent:live ..             # ② agent 镜像
+docker build -f docker/Dockerfile.agent -t redblueagent:live ..             # ② agent 镜像
 docker run -d --name pentest-agent --network docker_pentest_net \
-  -v $PWD/../data:/app/data --env-file ../.env pentestagent:live            # ③ agent 容器
+  -v $PWD/../data:/app/data --env-file ../.env redblueagent:live            # ③ agent 容器
 docker exec pentest-agent python3 scripts/run_agent.py \
   --config config.live.yaml --target 172.20.0.10 --no-interactive           # ④ 开跑
 ```
@@ -271,7 +271,7 @@ security:
                              # | auto-approve-scan | file（挂起等待审批文件）
 ```
 
-守卫的降级行为：检测器模型文件缺失或加载失败时打印告警横幅并写 `GUARD_DEGRADED` 审计事件后直通，**不阻断渗透主流程**；`strict: true`（或 env `GUARD_STRICT=1`）时改为启动即失败。每个配置键均有对应消费代码，密钥只放 `.env`（`PENTESTAGENT_TOKEN` 见 serve.py）。
+守卫的降级行为：检测器模型文件缺失或加载失败时打印告警横幅并写 `GUARD_DEGRADED` 审计事件后直通，**不阻断渗透主流程**；`strict: true`（或 env `GUARD_STRICT=1`）时改为启动即失败。每个配置键均有对应消费代码，密钥只放 `.env`（`REDBLUEAGENT_TOKEN` 见 serve.py）。
 
 ## 工作原理：一次迭代的完整数据流
 
@@ -360,12 +360,15 @@ v0.3 已完成（论文驱动优化，引用见 References [1]-[11]）：
 - [x] 污点追踪（CaMeL 最小版）[6]、蜜标防线（AgentShield）[10]、语义级端点预算（实测反哺）
 - [x] CHAP 式结构化 handoff 压缩协议 [11]
 
-待办：
+待办（v0.3 现状核查：四项均未完成，保留；前提已部分变化）：
 
-- [ ] 真实 LLM 演习：MockLLM 换接 llm_kernel 真实客户端，测不同模型在陷阱下的实际服从率
-- [ ] 陷阱向量扩展：覆盖 sqlmap / nmap 输出中的注入面
-- [ ] 守卫升级 L2 级联（当前为无 torch 依赖的轻量配置）
-- [ ] 多轮上下文攻击防御（当前为单条输入检测）
+- [ ] 真实 LLM 演习：fusion 演习仍为确定性 MockLLM（最坏情形服从假设）；llm_kernel 已支持
+      多模型 + 断点续跑，换接条件成熟，待测不同模型在陷阱下的实际服从率
+- [ ] 陷阱向量扩展：trap_lab 陷阱仍仅埋于 nikto/dirsearch 两个已验证向量；sqlmap/nmap
+      输出注入面待覆盖（差分重放评测已积累真实 sqlmap/nmap 良性输出可复用为基底）
+- [ ] 守卫升级 L2 级联：guard 当前仍加载 L1 hybrid 轻量配置；L2 级联已随差分重放评测
+      训练产出（blueteam/models），只差接入 guard 工厂与延迟评估
+- [ ] 多轮上下文攻击防御：检测仍为逐字段单条输入；跨轮累积构造的攻击无防御
 
 ## 已知局限
 

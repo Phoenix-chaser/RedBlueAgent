@@ -4,12 +4,12 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)]()
-[![CI](https://github.com/Phoenix-chaser/Pentestagent/actions/workflows/ci.yml/badge.svg)](https://github.com/Phoenix-chaser/Pentestagent/actions/workflows/ci.yml)
+[![CI](https://github.com/Phoenix-chaser/RedBlueAgent/actions/workflows/ci.yml/badge.svg)](https://github.com/Phoenix-chaser/RedBlueAgent/actions/workflows/ci.yml)
 [![Tests](https://img.shields.io/badge/tests-142%20passed-brightgreen.svg)]()
 [![CPU Only](https://img.shields.io/badge/runtime-CPU%20only-informational.svg)]()
 
 An LLM-driven automated penetration testing agent (red team) + a prompt injection attack detector (blue team) + a closed-loop attack-defense drill.
-This project evolved from the undergraduate thesis project [PentestAgent](https://github.com/Phoenix-chaser/Pentestagent): on top of the original ReAct pentest engine, it adds the security line of defense the agent itself was missing.
+This project evolved from the undergraduate thesis project [PentestAgent](https://github.com/Phoenix-chaser/RedBlueAgent)（本仓库前身）: on top of the original ReAct pentest engine, it adds the security line of defense the agent itself was missing.
 
 > ⚠️ **For authorized testing environments only.** Only use against targets you own or have written authorization to test. Unauthorized penetration testing is illegal in most jurisdictions.
 
@@ -167,8 +167,8 @@ Full evaluation (1,000× bootstrap CIs, robustness under 5 adversarial transform
 **Option A: Kali / Ubuntu one-click setup**
 
 ```bash
-git clone https://github.com/Phoenix-chaser/Pentestagent.git
-cd Pentestagent
+git clone https://github.com/Phoenix-chaser/RedBlueAgent.git
+cd RedBlueAgent
 bash setup_kali.sh
 ```
 
@@ -177,8 +177,8 @@ The script checks/installs security tools (nmap/nikto/sqlmap/dirsearch, skipped 
 **Option B: drills & detector only (no security tools, no API key required)**
 
 ```bash
-git clone https://github.com/Phoenix-chaser/Pentestagent.git
-cd Pentestagent
+git clone https://github.com/Phoenix-chaser/RedBlueAgent.git
+cd RedBlueAgent
 pip install -r requirements.txt
 ```
 
@@ -232,7 +232,7 @@ Custom OpenAI-compatible endpoint (e.g. Zhipu Coding Plan): add `LLM_BASE_URL=ht
 **Web console + remote approval**:
 
 ```bash
-PENTESTAGENT_TOKEN=$(openssl rand -hex 16) SECURITY_APPROVAL_POLICY=file \
+REDBLUEAGENT_TOKEN=$(openssl rand -hex 16) SECURITY_APPROVAL_POLICY=file \
   python3 scripts/serve.py        # http://127.0.0.1:8095/
 ```
 
@@ -244,9 +244,9 @@ Reports land in `data/reports/<session_id>/` (bilingual Markdown + JSON). Built-
 
 ```bash
 cd docker && docker compose up -d target                                   # 1. target
-docker build -f docker/Dockerfile.agent -t pentestagent:live ..             # 2. agent image
+docker build -f docker/Dockerfile.agent -t redblueagent:live ..             # 2. agent image
 docker run -d --name pentest-agent --network docker_pentest_net \
-  -v $PWD/../data:/app/data --env-file ../.env pentestagent:live            # 3. agent container
+  -v $PWD/../data:/app/data --env-file ../.env redblueagent:live            # 3. agent container
 docker exec pentest-agent python3 scripts/run_agent.py \
   --config config.live.yaml --target 172.20.0.10 --no-interactive           # 4. run
 ```
@@ -367,10 +367,10 @@ Done in v0.3 (paper-informed; citations in References [1]-[11]):
 
 Open:
 
-- [ ] Real-LLM drill: swap MockLLM for the real llm_kernel client and measure per-model obedience rates under traps
-- [ ] Extend trap vectors to sqlmap / nmap outputs
-- [ ] Upgrade guard to the L2 cascade (currently the torch-free light config)
-- [ ] Multi-turn context attack defense (currently single-input detection)
+- [ ] Real-LLM drill: the fusion drill still uses the deterministic MockLLM (worst-case obedience); llm_kernel now supports multi-provider + crash resume, so swapping is straightforward — measure per-model obedience rates under traps
+- [ ] Extend trap vectors to sqlmap / nmap outputs (currently only the two verified nikto/dirsearch vectors; real benign outputs from the differential-replay evaluation can serve as the base)
+- [ ] Upgrade guard to the L2 cascade: the guard still loads the L1 hybrid light config; L2 is already trained and stored in blueteam/models — only guard wiring and latency assessment remain
+- [ ] Multi-turn context attack defense (currently per-field single-input detection)
 
 ## Known Limitations
 

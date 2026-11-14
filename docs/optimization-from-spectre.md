@@ -1,4 +1,4 @@
-# Pentestagent 优化方案 —— 借鉴 SPECTRE 工程实践
+# RedBlueAgent（前身 Pentestagent）优化方案 —— 借鉴 SPECTRE 工程实践
 
 > 基准版本：Pentestagent @ `62640f6`（2026-11-08 同步）；SPECTRE @ `2c88924`（lalalala5678/spectre，main 分支浅克隆）
 > 性质：**分析方案文档，未改动任何代码**。文中所有 Pentestagent 论断均给出 `文件:行号`，SPECTRE 实践均注明其仓库内出处，可直接按图索骥。
