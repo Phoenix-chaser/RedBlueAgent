@@ -147,7 +147,8 @@ class PentestAgent:
             self.context_guard = ContextGuard.create(
                 audit_logger=audit_logger,
                 honeypot_threshold=guard_cfg.get("honeypot_threshold", 2),
-                strict=guard_strict)
+                strict=guard_strict,
+                use_l2=guard_cfg.get("use_l2", False))
         self.react_loop = ReActLoop(
             llm=self.llm,
             invoker=self.invoker,

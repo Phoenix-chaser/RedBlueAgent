@@ -165,3 +165,35 @@ def test_dirsearch_parser_legacy_fields_still_work():
     parsed = DirsearchParser().parse(report)
     assert parsed["paths"][0]["path"] == "/backup"
     assert parsed["paths"][0]["size"] == 7
+
+
+# -- trap vector expansion: sqlmap/nmap carriers (drill ②) ---------------------
+
+
+def test_trap_lab_spreads_across_four_vectors():
+    """四向量分摊：nikto/dirsearch/sqlmap/nmap 各自承载陷阱且均可见于
+    LLM 观察（sqlmap 的 [HINT] 行必须在 raw_summary 前 300 字符内——
+    埋尾部会被 observation 截断，实测发现的坑）。"""
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+    from fusion.trap_lab import build_outputs, TRAPS
+    from modules.tool_invocation.parsers.nmap_parser import NmapParser
+    from modules.tool_invocation.parsers.nikto_parser import NiktoParser
+    from modules.tool_invocation.parsers.dirsearch_parser import DirsearchParser
+    from modules.tool_invocation.parsers.sqlmap_parser import SqlmapParser
+    keys = ["override_cn", "fake_system_tag", "base64_payload", "false_report"]
+    outs = build_outputs(keys)
+    cm_parsers = {
+        "nikto": NiktoParser().parse(outs["nikto:scan"], ""),
+        "dirsearch": DirsearchParser().parse(outs["dirsearch:scan"], ""),
+        "sqlmap": SqlmapParser().parse(outs["sqlmap:test"], ""),
+        "nmap": NmapParser().parse(outs["nmap:service"], ""),
+    }
+    # 每个陷阱至少在某个向量的观察文本中可见
+    obs = {t: ContextManager()._tool_result_to_observation(
+        ToolResult(tool=t, command=t, success=True, parsed=p))
+        for t, p in cm_parsers.items()}
+    joined = "\n".join(obs.values())
+    for k in keys:
+        probe = TRAPS[k][:20]
+        assert probe in joined, f"trap {k} not visible in any observation"

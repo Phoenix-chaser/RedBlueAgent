@@ -56,3 +56,5 @@ context_guard:
   enabled: true
   honeypot_threshold: 2       # quarantine events before honeypot flag
   strict: false               # true = refuse to start when the blueteam model fails to load
+  use_l2: false               # true = L2 级联（L1 落决策带才升级堆叠裁决；需 torch，
+                             # 失败自动回退 L1；带参数来自 blueteam/results/cascade.json）

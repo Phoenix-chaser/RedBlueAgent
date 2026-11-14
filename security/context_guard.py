@@ -81,6 +81,8 @@ class ContextGuard:
         self.honeypot_threshold = honeypot_threshold
         self.stats = GuardStats()
         self.honeypot_suspected = False
+        # 多轮拼接检测的每字段历史（(tool, field) -> 近期值列表，窗口 3）
+        self._field_history: dict[tuple[str, str], list[str]] = {}
         # 污点签名库（CaMeL/FIDES 的最小可行动版 [6]）：被隔离载荷/蜜标
         # 响应的特征片段——后续动作参数（外发 sink）命中即视为
         # 「不可信数据试图借 Agent 之手执行/外传」
@@ -90,8 +92,14 @@ class ContextGuard:
     @classmethod
     def create(cls, audit_logger=None, blueteam_root: Path | None = None,
                honeypot_threshold: int = 2,
-               strict: bool = False) -> "ContextGuard | None":
-        """加载 blueteam 检测器（L0+L1 轻量配置）。
+               strict: bool = False,
+               use_l2: bool = False) -> "ContextGuard | None":
+        """加载 blueteam 检测器。
+
+        默认 L0+L1 轻量配置（无 torch 依赖）；use_l2=True 时升级为 L2 级联
+        （L1 分数落决策带 (tau_lo, tau_hi) 才升级堆叠元学习器裁决，带参数取自
+        blueteam/results/cascade.json 的评测产物）。L2 依赖 torch 且失败自动
+        回退 L1 并告警——不因升级尝试失败而丢掉整条防线。
 
         失败时默认降级为直通（返回 None），但降级必须可见：控制台告警 +
         GUARD_DEGRADED 审计事件，事后可从日志追溯防线失效时刻。
@@ -114,6 +122,21 @@ class ContextGuard:
             thr = float(bundle["thresholds"]["hybrid"])  # 模型自带安全工作点阈值
             defense = Defense(RuleDetector(), bundle["detectors"]["hybrid"], thr)
             scan = DeobfuscatedScan(defense)
+            if use_l2:
+                try:
+                    from src.cascade import CascadeDetector          # noqa: E402
+                    band = json.loads(
+                        (root / "results" / "cascade.json").read_text(encoding="utf-8"))
+                    cascade = CascadeDetector(
+                        defense, bundle["ensemble"],
+                        float(band["tau_lo"]), float(band["tau_hi"]),
+                        float(bundle["thresholds"]["ensemble"]))
+                    scan = DeobfuscatedScan(cascade)
+                    print(f"[ContextGuard] L2 级联已启用（升级率 "
+                          f"{band.get('escalation_rate', 0):.1%}，摊销延迟 "
+                          f"{band.get('amortized_ms', 0):.1f}ms/条）")
+                except Exception as e:  # torch 缺失/cascade 产物缺失 → 回退 L1
+                    print(f"[ContextGuard][警告] L2 级联加载失败，回退 L1 轻量配置：{e}")
             return cls(scan, thr, audit_logger=audit_logger,
                        honeypot_threshold=honeypot_threshold)
         except Exception as e:  # 模型缺失/依赖不全 → 直通降级（必须显式可见）
@@ -137,17 +160,49 @@ class ContextGuard:
             return None
 
     # ────────────────────────── 扫描 ──────────────────────────
+    def _remember_field(self, tool: str, path: str, value: str) -> None:
+        h = self._field_history.setdefault((tool, path), [])
+        h.append(value)
+        del h[:-3]  # 只保留最近 3 条
+
     def _is_attack(self, text: str) -> tuple[bool, float]:
         score = self.detector.predict_proba([text])[0][1]
         return score >= self.threshold, score
 
     def _sanitize_value(self, value: Any, path: str, tool: str) -> Any:
-        """递归清洗 parsed 结构中的字符串字段。"""
+        """递归清洗 parsed 结构中的字符串字段。
+
+        多轮拼接防御（最小版）：单条值未命中时，与该字段近期历史值拼接
+        复检——攻击者把一条指令拆到同字段的多次输出里（每条单独看似良性），
+        拼接后才构成完整攻击。命中记 MULTI_TURN_QUARANTINE。
+        """
         if isinstance(value, str):
             if not _looks_like_instruction(value):
+                self._remember_field(tool, path, value)
                 return value
             self.stats.scanned_strings += 1
             is_attack, score = self._is_attack(value)
+            if not is_attack:
+                # 多轮拼接复检（历史窗口 3 条）
+                hist = self._field_history.get((tool, path), [])
+                if hist:
+                    joined = " ".join(hist[-3:] + [value])
+                    mt_attack, mt_score = self._is_attack(joined)
+                    if mt_attack:
+                        self.stats.quarantined += 1
+                        self.stats.hits.append(
+                            dict(tool=tool, field=path, score=round(mt_score, 3),
+                                 preview=f"[multi-turn] {value[:50]}",
+                                 multi_turn=True))
+                        self.add_taint(joined, source=f"mt-quarantine:{tool}:{path}")
+                        if self.audit is not None:
+                            self.audit.log_guard_event(
+                                dict(event="MULTI_TURN_QUARANTINE", tool=tool,
+                                     field=path, score=round(mt_score, 3),
+                                     note="单条良性但与历史值拼接后构成攻击"))
+                        return QUARANTINE_PLACEHOLDER
+                self._remember_field(tool, path, value)
+                return value
             if is_attack:
                 self.stats.quarantined += 1
                 self.stats.hits.append(
