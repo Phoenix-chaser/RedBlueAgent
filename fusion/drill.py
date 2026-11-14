@@ -147,11 +147,16 @@ def main() -> None:
                     help="真 LLM 演习（默认 MockLLM 最坏情形）；需 .env 配置 Key")
     ap.add_argument("--provider", default=None)
     ap.add_argument("--model", default=None)
+    ap.add_argument("--no-declaration", action="store_true",
+                    help="消融：system prompt 去掉 Spotlighting 声明"
+                         "（归因模型鲁棒性 vs 输入声明的贡献）")
     args = ap.parse_args()
     real_llm = None
     if args.real:
         from fusion.real_llm import RealLLM
-        real_llm = RealLLM(provider=args.provider, model=args.model)
+        real_llm = RealLLM(provider=args.provider, model=args.model,
+                           declaration=not args.no_declaration)
+        print(f"[real-llm] Spotlighting 声明: {'在' if not args.no_declaration else '已移除'}")
         print(f"[real-llm] provider={real_llm.client.provider} "
               f"model={real_llm.client.model}（真 LLM 服从率演习）")
 
@@ -164,6 +169,9 @@ def main() -> None:
             guard = ContextGuard.create(honeypot_threshold=2,
                                    use_l2=os.getenv("DRILL_USE_L2", "0") in ("1", "true")) if guard_on else None
             r = run_once(trap_keys, guard, llm=real_llm)
+            print(f"  ✓ {name} guard={'on' if guard_on else 'off'} "
+                  f"hijack={'是' if r['hijacked'] else '否'} "
+                  f"iter={r.get('iterations', '?')}", flush=True)
             r.update(scenario=name, guard="on" if guard_on else "off", traps=len(trap_keys))
             rows.append(r)
 
