@@ -182,8 +182,8 @@ def test_loop_aborts_after_consecutive_failures():
     loop = make_loop(llm)
     state = loop.run(make_state())
     # Loop stopped exactly at the threshold, not after burning max_iterations
-    assert llm.calls == ReActLoop.MAX_CONSECUTIVE_LLM_FAILURES
-    assert len(state.llm_turns) == ReActLoop.MAX_CONSECUTIVE_LLM_FAILURES
+    assert llm.calls == loop.engine.max_consecutive_llm_failures
+    assert len(state.llm_turns) == loop.engine.max_consecutive_llm_failures
     # From the 2nd failure on, the observation carries the system note
     assert all("系统注记" in t.observation for t in state.llm_turns[1:])
     assert "系统注记" not in state.llm_turns[0].observation

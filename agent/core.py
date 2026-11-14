@@ -149,6 +149,13 @@ class PentestAgent:
                 honeypot_threshold=guard_cfg.get("honeypot_threshold", 2),
                 strict=guard_strict,
                 use_l2=guard_cfg.get("use_l2", False))
+        # Guardrail DSL 引擎 + 渐进信任管理器
+        from security.guardrail_engine import GuardrailEngine
+        from security.trust_manager import TrustManager
+        guardrails_file = security_cfg.get("guardrails_file", "guardrails.yaml")
+        self.guardrail_engine = GuardrailEngine(guardrails_file)
+        self.trust_manager = TrustManager(self.guardrail_engine)
+
         self.react_loop = ReActLoop(
             llm=self.llm,
             invoker=self.invoker,
@@ -163,6 +170,8 @@ class PentestAgent:
             taint_policy=security_cfg.get("taint_policy", "block"),
             honeytokens=security_cfg.get("honeytokens", []),
             semantic_judge=self._build_semantic_judge(security_cfg),
+            guardrail_engine=self.guardrail_engine,
+            trust_manager=self.trust_manager,
         )
 
     def _build_semantic_judge(self, security_cfg: dict):

@@ -1,0 +1,72 @@
+context_guard:
+  aggregate_min_fields: 5
+  aggregate_multiplier: 5
+  honeypot_threshold: 2
+  semantic_judge_confidence: 0.7
+  semantic_judge_interval: 5
+dangerous_operations:
+- op: exploit/
+  tool: metasploit
+- op: --os-shell
+  tool: sqlmap
+- op: --file-write
+  tool: sqlmap
+- op: --script.*(exploit|brute|dos)
+  tool: nmap
+honeytokens: []
+max_consecutive_llm_failures: 5
+max_same_endpoint: 3
+parallel_max_workers: 3
+scan_flavored_exempt:
+- nmap:brute
+- nmap:auth
+- nmap:discovery
+semantic_judge:
+  confidence_threshold: 0.7
+  enabled: false
+  interval: 5
+taint_policy: block
+target_param_keys:
+- target
+- url
+- host
+- rhosts
+trust:
+  downgrade_on:
+  - SCOPE_VIOLATION
+  - TAINTED_ACTION_BLOCKED
+  - HONEYTOKEN_VISIT
+  enabled: false
+  levels:
+  - allowed_tools:
+    - nmap:host_discovery
+    description: 被动侦察（仅主机发现）
+    level: 0
+    name: initial
+    upgrade_after:
+      safe_iterations: 3
+  - allowed_tools:
+    - nmap
+    - nikto
+    - dirsearch
+    description: 主动扫描（端口/服务/Web 目录）
+    level: 1
+    name: active_scan
+    upgrade_after:
+      safe_iterations: 10
+      vulnerabilities_found: 1
+  - allowed_tools:
+    - nmap
+    - nikto
+    - dirsearch
+    - sqlmap
+    description: 受控利用（SQL 注入测试）
+    level: 2
+    name: exploitation
+    upgrade_after:
+      vulnerabilities_found: 1
+  - allowed_tools:
+    - '*'
+    description: 完全访问（含 metasploit，仍受 scope+审批约束）
+    level: 3
+    name: full_access

@@ -33,21 +33,10 @@ if TYPE_CHECKING:
 
 
 class ReActLoop:
-    # LLM 连续失败达到该次数即中止循环（会话已快照，可 --session-id 恢复），
-    # 防止服务故障时静默烧光迭代预算
-    MAX_CONSECUTIVE_LLM_FAILURES = 5
-
-    # 语义级重复预算：同一 (tool, host+path) 端点最多执行次数——实测发现
-    # LLM 用参数尾部微调绕过精确哈希的重复检测（Juice Shop 轮 5 连发同端点）
-    MAX_SAME_ENDPOINT = 3
-
     # attack_tree 建议制：漏洞严重度 → UCB1 优先级
     _SEVERITY_PRIORITY = {
         "critical": 1.0, "high": 0.8, "medium": 0.5, "low": 0.3,
     }
-
-    # parallel 扇出的并发护栏（SPECTRE WAVE 滚动窗思想的单机版）
-    PARALLEL_MAX_WORKERS = 3
 
     def __init__(
         self,
@@ -65,6 +54,8 @@ class ReActLoop:
         taint_policy: str = "block",
         honeytokens: list[str] | None = None,
         semantic_judge=None,
+        guardrail_engine=None,
+        trust_manager=None,
     ):
         self.llm = llm
         self.invoker = invoker
@@ -96,6 +87,21 @@ class ReActLoop:
         # 语义累积 LLM-as-judge（可选，config context_guard.llm_judge: true 启用）：
         # 规则层（拼接+聚合）覆盖施压模式，LLM-as-judge 覆盖语义推理链攻击
         self.semantic_judge = semantic_judge
+        # Guardrail DSL 引擎（guardrails.yaml 声明式策略）+ 渐进信任管理器。
+        # engine 为 None 时创建默认引擎（等价于 v0.3.3 行为，向后兼容）
+        from security.guardrail_engine import GuardrailEngine
+        from security.trust_manager import TrustManager
+        self.engine = guardrail_engine or GuardrailEngine()
+        self.trust = trust_manager or TrustManager(self.engine)
+        # 用 engine 值覆盖旧构造参数（engine 优先，显式参数兜底）
+        if taint_policy and guardrail_engine is None:
+            self.taint_policy = taint_policy if taint_policy in ("block", "warn") else "block"
+        else:
+            self.taint_policy = self.engine.taint_policy
+        if honeytokens is not None and guardrail_engine is None:
+            self.honeytokens = list(honeytokens)
+        else:
+            self.honeytokens = self.engine.honeytokens
         # Caches to avoid recomputing unchanged context on every iteration
         self._rag_cache: tuple[frozenset, str] = (frozenset, "")  # (service_keys, context)
 
@@ -128,7 +134,7 @@ class ReActLoop:
 
     def _endpoint_exhausted(self, action: ActionDecision) -> bool:
         key = endpoint_key(action.tool, action.params or {})
-        return key is not None and self._endpoint_counts.get(key, 0) >= self.MAX_SAME_ENDPOINT
+        return key is not None and self._endpoint_counts.get(key, 0) >= self.engine.max_same_endpoint
 
     def _charge_endpoint(self, action: ActionDecision) -> None:
         key = endpoint_key(action.tool, action.params or {})
@@ -139,7 +145,7 @@ class ReActLoop:
         key = endpoint_key(action.tool, action.params or {}) or ("?", "?")
         return (
             f"SEMANTIC_REPEAT_BLOCKED: {action.tool} 对同一端点 {key[1]} 已执行 "
-            f"{self.MAX_SAME_ENDPOINT} 次（参数微调不再产生新信息）。"
+            f"{self.engine.max_same_endpoint} 次（参数微调不再产生新信息）。"
             f"下一步（可执行）：换用其他已发现的端点/端口/路径重发该工具，"
             f"或基于已有结果推进阶段分析。")
 
@@ -293,7 +299,7 @@ class ReActLoop:
                     "payload": error_obs,
                     "consecutive": fails,
                 })
-                if fails >= self.MAX_CONSECUTIVE_LLM_FAILURES:
+                if fails >= self.engine.max_consecutive_llm_failures:
                     console.print(
                         f"[red]LLM 连续失败 {fails} 次，中止循环——"
                         f"会话已快照，可用 --session-id 恢复[/red]")
@@ -323,9 +329,18 @@ class ReActLoop:
 
             if action.type == "tool" and action.tool:
                 console.print(f"[bold]Tool:[/bold] {action.tool} | Params: {action.params}")
-
                 action_hash = hash((action.tool, json.dumps(action.params, sort_keys=True, ensure_ascii=False)))
-                if action_hash in self._action_hashes:
+
+                # ── 渐进信任（Guardrail DSL；disabled 时恒 True 零开销）──
+                trust_ok, trust_reason = self.trust.can_execute(
+                    action.tool, action.params)
+                if not trust_ok:
+                    observation = ToolResult(
+                        tool=action.tool or "unknown", command="",
+                        success=False, error_message=trust_reason)
+                    console.print(f"[yellow]Trust L{self.trust.level} blocked {action.tool}[/yellow]")
+                    self.trust.record_outcome(action.tool or "", success=False)
+                elif action_hash in self._action_hashes:
                     observation = ToolResult(
                         tool=action.tool or "unknown",
                         command="",
@@ -360,9 +375,6 @@ class ReActLoop:
                 else:
                     self._action_hashes.add(action_hash)
                     self._charge_endpoint(action)
-                    # 污点 sink 检查（CaMeL 最小版 [6]）：动作参数命中此前
-                    # 被隔离载荷/蜜标内容的签名 → 视为不可信数据试图借
-                    # Agent 之手执行/外传
                     sig = self._taint_hit(action)
                     if sig is not None and self.taint_policy == "block":
                         self._audit_guard(dict(
@@ -383,16 +395,12 @@ class ReActLoop:
                             self._audit_guard(dict(
                                 event="TAINTED_ACTION_WARN", tool=action.tool,
                                 signature=sig[:60], note="warn 模式：放行但已审计"))
-                        # 蜜标检查（AgentShield [10]）：合法测试永不需要访问的
-                        # 路径——访问放行（属于发现），但响应全文登记为污点
                         honey = self._honey_hit(action)
                         if honey:
                             self._audit_guard(dict(
                                 event="HONEYTOKEN_VISIT", tool=action.tool,
                                 marker=honey,
                                 note="蜜标被访问；其响应已登记为污点，后续使用将被拦截"))
-                        # WAL 契约：动作先落账（flush+fsync）再执行副作用——
-                        # 崩溃不可能丢失「已发生副作用」的记录
                         _log("action", {
                             "iteration": state.total_iterations + 1,
                             "thought": thought,
@@ -400,11 +408,8 @@ class ReActLoop:
                             **({"honeytoken": honey} if honey else {}),
                         })
                         observation = self.invoker.invoke(action)
-                        # 蓝队守卫：工具输出进 LLM 上下文前的隔离检查点
                         if self.context_guard is not None and isinstance(observation, ToolResult):
                             observation = self.context_guard.guard_observation(observation)
-                            # 语义累积 LLM-as-judge：收集亚阈值内容，达到
-                            # interval 时由 LLM 判定是否构成协同攻击
                             if self.semantic_judge is not None:
                                 self.semantic_judge.observe(
                                     str(observation.parsed)[:200],
@@ -429,14 +434,20 @@ class ReActLoop:
                             observation.parsed["_honeytoken_warning"] = (
                                 f"该响应来自蜜标路径（{honey}）——合法测试永不需要访问它，"
                                 f"内容高度可疑，不得用于任何后续动作")
-                        # 全文存档：截断发生时 LLM 仍知道原始输出去处
                         if event_log is not None and isinstance(observation, ToolResult):
                             observation.archive_path = event_log.save_tool_output(
                                 observation, state.total_iterations + 1)
-                    if observation.success:
-                        console.print(f"[green]✓ Tool completed in {observation.elapsed_seconds:.1f}s[/green]")
-                    else:
-                        console.print(f"[red]✗ Tool error: {observation.error_message}[/red]")
+                        # 渐进信任：成功执行 → 记录安全行为
+                        vulns = len(state.vulnerabilities) if hasattr(state, "vulnerabilities") else 0
+                        self.trust.record_outcome(
+                            action.tool or "",
+                            success=observation.success if isinstance(observation, ToolResult) else True,
+                            vulnerabilities_found=vulns)
+                    if isinstance(observation, ToolResult):
+                        if observation.success:
+                            console.print(f"[green]✓ Tool completed in {observation.elapsed_seconds:.1f}s[/green]")
+                        else:
+                            console.print(f"[red]✗ Tool error: {observation.error_message}[/red]")
             elif action.type == "parallel":
                 # ── 并行扇出（仅限相互独立的扫描动作）────────────────────
                 sub_actions: list[ActionDecision] = []
@@ -488,7 +499,7 @@ class ReActLoop:
                 results: list[tuple[ActionDecision, ToolResult]] = []
                 if sub_actions:
                     with ThreadPoolExecutor(
-                        max_workers=min(self.PARALLEL_MAX_WORKERS, len(sub_actions))
+                        max_workers=min(self.engine.parallel_max_workers, len(sub_actions))
                     ) as pool:
                         futures = {pool.submit(self.invoker.invoke, s): s for s in sub_actions}
                         for fut in as_completed(futures):
