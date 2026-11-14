@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Unit tests for the parallel action protocol (P2-2).
 
-Guards adopted from SPECTRE's rolling-window concurrency: max 3 workers,
+Guards adopted from 业界实践's rolling-window concurrency: max 3 workers,
 WAL-before-side-effect for every sub-action, per-sub-action scope/danger/
 repeat checks (dangerous actions never ride a parallel batch), deterministic
 replay order.

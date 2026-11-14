@@ -1,7 +1,7 @@
 """
 SessionEventLog - append-only event journal + snapshots + instance lock.
 
-WAL discipline adopted from SPECTRE (backend/src/persist.mjs):
+WAL discipline adopted from 业界实践:
 - The "action" event is flushed+fsynced BEFORE the tool subprocess runs, so a
   crash can never lose the record of a side effect that already happened
   (write-ahead: journal first, side effect second).
@@ -145,7 +145,7 @@ class EventLog:
         """Archive the full raw output of one tool run; returns the path.
 
         The truncated marker the LLM sees points here — the cheap local
-        equivalent of SPECTRE's seq-completion channel.
+        equivalent of 业界实践's seq-completion channel.
         """
         out_dir = self.session_dir / "tool_outputs"
         out_dir.mkdir(parents=True, exist_ok=True)

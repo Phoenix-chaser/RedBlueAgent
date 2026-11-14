@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Unit tests for the tool-output protocol (P1-4, adopted from SPECTRE
+"""Unit tests for the tool-output protocol (P1-4, adopted from 业界实践
 AGENTS.md rules): empty-result diagnostics, total disclosure navigation
 lines, full-output archive pointers, and named-level param inference.
 """
@@ -69,7 +69,7 @@ def test_nmap_many_hosts_navigation_line_before_body():
     obs = observation_for(ToolResult(
         tool="nmap", command="nmap", success=True, parsed={"hosts": hosts}))
     assert "共 7 台主机，显示前 5 台" in obs
-    # navigation line precedes the listing (truncation-immune, SPECTRE r22)
+    # navigation line precedes the listing (truncation-immune, 业界实践 r22)
     assert obs.index("共 7 台主机") < obs.index("10.0.0.1")
 
 

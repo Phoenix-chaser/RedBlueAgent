@@ -350,7 +350,7 @@ python3 -m pytest tests/unit -q
 
 ## 路线图
 
-v0.2 已完成（工程化改造，借鉴 SPECTRE 实践，详见 [docs/optimization-from-spectre.md](docs/optimization-from-spectre.md)）：
+v0.2 已完成（工程化改造）：
 
 - [x] 会话 checkpoint / 断点续跑（WAL 事件日志 + 快照 + 实例锁 + 腰斩续跑）
 - [x] LLM 传输层韧性（瞬态退避重试 / 永久错误 fail-fast / 429 冷却闸门）

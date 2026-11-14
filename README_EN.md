@@ -353,7 +353,7 @@ python3 -m pytest tests/unit -q
 
 ## Roadmap
 
-Done in v0.2 (engineering overhaul informed by SPECTRE practices — see [docs/optimization-from-spectre.md](docs/optimization-from-spectre.md)):
+Done in v0.2 (engineering overhaul informed by industry best practices ):
 
 - [x] Session checkpoint / crash resume (WAL event log + snapshots + instance lock + interrupted-turn resume)
 - [x] LLM transport resilience (transient backoff retry / permanent fail-fast / 429 cooldown gate)

@@ -1,6 +1,6 @@
 """Unit tests for the session WAL: EventLog, SessionLock, replay (P1-1).
 
-Covers the persistence contract adopted from SPECTRE:
+Covers the persistence contract adopted from 业界实践:
 fsync-before-ack, torn-tail tolerance, fatal mid-file corruption,
 snapshot+tail replay, interrupted-turn (腰斩) detection, instance locking.
 """

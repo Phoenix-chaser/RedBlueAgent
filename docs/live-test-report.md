@@ -32,7 +32,7 @@
 | L1 | **dirsearch 全军覆没**（`no such option: --format`） | dirsearch 0.5.0 移除 `--format`（改 `-O/--output-formats`），且 JSON report 字段改为 `url`/`contentLength` 驼峰；`-o /dev/stdout` 在 0.5 上挂死 | `DirsearchTool.run` 重写：版本探测选 flag、report 落临时文件读回喂 parser、CLI 输出仅作 fallback；parser 兼容两代字段（modules/tool_invocation/tools/dirsearch_tool.py 等 3 文件） |
 | L2 | **恢复后重复动作防线丢失** | `collect` 哈希只来自快照之后的 tail 事件，快照之前的 action 哈希丢失——旧动作可原样重跑 | 新增 `collect_action_hashes`（全量事件扫描）替换 tail 收集（agent/session_log.py、agent/core.py） |
 
-两处均附回归测试（142 用例全绿）。这印证了 SPECTRE 的教训表文化：**实测是唯一能让"看起来对"变成"确实对"的环节**。
+两处均附回归测试（142 用例全绿）。这印证了 业界实践 的教训表文化：**实测是唯一能让"看起来对"变成"确实对"的环节**。
 
 ## 环境备忘（坑与解法）
 
