@@ -1,55 +1,50 @@
-# RedBlueAgent —— 红蓝一体的 LLM 安全测试平台
+<div align="center">
 
-**中文** | [English](README_EN.md)
+# RedBlueAgent
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)]()
-[![CI](https://github.com/Phoenix-chaser/RedBlueAgent/actions/workflows/ci.yml/badge.svg)](https://github.com/Phoenix-chaser/RedBlueAgent/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-197%20passed-brightgreen.svg)](https://github.com/Phoenix-chaser/RedBlueAgent/actions/workflows/ci.yml)
-[![CPU Only](https://img.shields.io/badge/runtime-CPU%20only-informational.svg)]()
+### 红蓝一体的 LLM 安全测试平台
 
-LLM 驱动的自动化渗透测试 Agent（红队）+ 提示注入攻击检测器（蓝队）+ 攻防演习闭环。
-项目由本科毕业设计 [PentestAgent](https://github.com/Phoenix-chaser/RedBlueAgent)（本仓库前身） 演化而来：在保留原有 ReAct 渗透引擎的基础上，为 Agent 补上了它自己缺失的安全防线。
+**LLM 驱动的渗透测试 Agent（红队）· 提示注入检测器（蓝队）· 攻防演习闭环**
 
-> ⚠️ **仅限授权测试环境使用**。只能对你拥有或已获得书面授权的目标使用；未授权的渗透测试在多数司法管辖区属违法行为。
+**中文** · [English](README_EN.md)
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge)](LICENSE)
+[![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![CI](https://img.shields.io/github/actions/workflow/status/Phoenix-chaser/RedBlueAgent/ci.yml?style=for-the-badge&label=CI)](https://github.com/Phoenix-chaser/RedBlueAgent/actions/workflows/ci.yml)
+[![Tests](https://img.shields.io/badge/Tests-197%20passed-brightgreen?style=for-the-badge)](https://github.com/Phoenix-chaser/RedBlueAgent/actions/workflows/ci.yml)
+[![CPU Only](https://img.shields.io/badge/Runtime-CPU%20only-lightgrey?style=for-the-badge)]()
+
+<sub>由本科毕业设计 PentestAgent（本仓库前身）演化而来：在保留原有 ReAct 渗透引擎的基础上，为 Agent 补上了它自己缺失的安全防线</sub>
+
+<p align="center"><img src="docs/images/console-session.png" alt="RedBlueAgent Web 控制台 · 会话运行态" width="100%"></p>
+
+</div>
+
+> [!WARNING]
+> **仅限授权测试环境使用。** 只能对你拥有或已获得书面授权的目标使用；未授权的渗透测试在多数司法管辖区属违法行为。
 
 ## 当前状态一览
 
-- **端到端可用**：真实工具 + 内置靶场的实测已通过——走完 7 个 PTES 阶段、闭环确认真实 SQL 注入、断点续跑、审批流，见[实测报告](docs/live-test-report.md)。各场景均为单次运行。
-- **蓝队检测器**：在仓库内提交的评测产物上 AUROC 0.998、对抗性良性误报 0。数据是自写模板，结论限于同分布。
-- **攻防演习（Mock LLM，16 次运行）**：守卫开启后劫持率 100% → 14%，任务完成率 0% → 86%；混合三陷阱场景有一处载荷漏检。
-- **真实 LLM（glm-5.3）**：守卫关闭时服从率已是 0%；守卫开启后任务完成率 43%。守卫在真实模型上的收益尚未得到证明。
-- **未闭合的事项**：出站边界对透传参数的校验、并行动作路径的检查等，见[已知局限](#已知局限)。
+| 端到端实测 | 检测器 AUROC | Mock 劫持率 · 守卫关 → 开 | 真 LLM 服从率 · 守卫关 |
+|:---:|:---:|:---:|:---:|
+| ✅ 7/7 阶段跑通 | **0.998** | 100% → **14%** | **0%** |
 
----
+- **端到端**：真实工具 + 内置靶场，闭环确认真实 SQL 注入、断点续跑、审批流，见[实测报告](docs/live-test-report.md)。各场景均为单次运行。
+- **检测器**：数字取自仓库内提交的评测产物；数据是自写模板，对抗性良性误报 0，结论限于同分布。
+- **攻防演习（Mock，16 次运行）**：任务完成率 0% → 86%；混合三陷阱场景有一处载荷漏检。
+- **真实 LLM（glm-5.3）**：守卫开启后任务完成率 43%。守卫在真实模型上的收益尚未得到证明。
 
-## 目录
+> [!IMPORTANT]
+> 仍未闭合：出站边界对透传参数的校验、并行动作路径的检查等，见[已知局限](#已知局限)。
 
-- [当前状态一览](#当前状态一览)
-- [为什么做这个项目](#为什么做这个项目)
-- [系统架构](#系统架构)
-- [界面一览](#界面一览)
-- [攻防演习结果](#攻防演习结果)
-- [蓝队检测器性能](#蓝队检测器性能)
-- [安装](#安装)
-- [快速开始](#快速开始)
-- [配置参考](#配置参考)
-- [工作原理：一次迭代的完整数据流](#工作原理一次迭代的完整数据流)
-- [项目结构](#项目结构)
-- [测试](#测试)
-- [路线图](#路线图)
-- [已知局限](#已知局限)
-- [学术依据（References）](#学术依据references)
-- [致谢与声明](#致谢与声明)
-
----
+**导航**　[为什么做](#为什么做这个项目) · [系统架构](#系统架构) · [界面一览](#界面一览) · [演习结果](#攻防演习结果) · [检测器性能](#蓝队检测器性能) · [安装](#安装) · [快速开始](#快速开始) · [工作原理](#工作原理一次迭代的完整数据流) · [路线图](#路线图) · [已知局限](#已知局限) · [致谢](#致谢与声明)
 
 ## 为什么做这个项目
 
 渗透测试 Agent 的安全面有**两个方向**，本项目的原版（PentestAgent v1）只覆盖了其中一个：
 
 | 方向 | 威胁 | v1 的防御 | 缺口 |
-|---|---|---|---|
+|:---|:---|:---|:---|
 | **出站**（Agent → 目标） | LLM 幻觉出越权命令、危险操作 | ✅ scope 校验 + 危险操作审批 + 审计日志 | — |
 | **入站**（目标 → Agent） | 目标内容中埋藏提示注入，劫持 Agent 本身 | ❌ 完全空白 | **本项目补上** |
 
@@ -64,35 +59,37 @@ LLM 驱动的自动化渗透测试 Agent（红队）+ 提示注入攻击检测�
 ## 系统架构
 
 ```
-                        ┌──────────────────────────────────────────────────┐
-                        │              红队 ReAct 循环（agent/react_loop.py）│
-                        │                                                  │
-   用户 --target/scope→ │  THINK  构建 6 段式 Prompt → 调用 LLM → 解析      │
-                        │         <thought>/<action> 结构化输出             │
-                        │    │                                             │
-                        │  ACT    出站安全层（security/）                   │
-                        │         scope 校验 → 危险操作审批 → 审计          │
-                        │         工具执行（modules/tool_invocation/）      │
-                        │         参数解释器 → 命令 → 子进程(无shell) → 解析器│
-                        │    │                                             │
-                        │         ┌──────────────────────────────┐         │
-                        │  OBSERVE│ 蓝队上下文守卫 ContextGuard    │         │
-                        │         │ (security/context_guard.py)  │         │
-                        │         │  L0 归一化/递归解码            │         │
-                        │         │  L1 规则 ⊕ 混合特征LR(增强版)  │         │
-                        │         │  ├─ 放行：干净内容             │         │
-                        │         │  ├─ 隔离：载荷→占位标记         │         │
-                        │         │  └─ 蜜罐标记：累计≥2 → 告警    │         │
-                        │         └──────────────────────────────┘         │
-                        │    │                                             │
-                        │  上下文合并 + 自动推理（危险服务/敏感路径规则库）     │
-                        │  阶段推进（PTES 状态机）+ 分层压缩                 │
-                        └──────────────────────────────────────────────────┘
-                                        │
-          fusion/：攻防演习（8 场景 × 守卫开/关，检验守卫作用）
+用户输入 target / scope
+        │
+        ▼
+┌─ 红队 · ReAct 循环（agent/react_loop.py）
+│
+│  THINK    构建 6 段式 Prompt → 调用 LLM → 解析 <thought>/<action>
+│    │
+│  ACT      出站安全层（security/）：scope 校验 → 危险操作审批 → 审计
+│           工具执行（modules/tool_invocation/）：
+│             参数解释器 → 命令 → 子进程（无 shell）→ 输出解析器
+│    │
+│  OBSERVE  蓝队上下文守卫 ContextGuard（security/context_guard.py）
+│             L0 归一化 / 递归解码 → L1 规则 ⊕ 混合特征 LR（增强版）
+│             放行：干净内容 · 隔离：载荷 → 占位标记 · 蜜罐标记：累计 ≥2 → 告警
+│    │
+│  上下文合并 + 自动推理（危险服务 / 敏感路径规则库）
+│  阶段推进（PTES 状态机）+ 分层压缩
+│    │
+└────┴──▶ 回到 THINK，直至 LLM 输出 finish 或达到迭代上限
+         │
+         └──▶ fusion/：攻防演习（8 场景 × 守卫开 / 关，检验守卫作用）
 ```
 
 ### 三大组成部分
+
+| 🔴 红队 · 渗透引擎 | 🔵 蓝队 · 注入检测 | 🟣 融合层 · 守卫与演习 |
+|:---|:---|:---|
+| ReAct × PTES 七阶段状态机<br>ATT&CK 式知识库驱动攻击树<br>nmap · nikto · dirsearch · sqlmap · metasploit<br>参数/输出双层解释器<br>分层压缩 · WAL 断点续跑 | 中英文模板数据集，9 类攻击模式<br>L0 解码 → L1 规则 ⊕ LR → L2 级联<br>模板级不相交划分<br>FPR 约束阈值 · 自助置信区间<br>真实工具输出差分重放评测 | Act→Observe 字段级隔离<br>蜜罐感知 · 污点追踪 · 蜜标<br>Spotlighting 双入口包裹<br>渐进信任 · 语义累积 LLM-as-judge<br>攻防演习（Mock / 真 LLM） |
+
+<details>
+<summary><b>各组件详细说明（点击展开）</b></summary>
 
 **红队（主目录）——自动化渗透引擎**
 - ReAct 范式 × PTES 七阶段状态机（目标确认→信息收集→漏洞扫描→漏洞分析→漏洞利用→后渗透→报告），阶段推进由前置条件自动校验，防卡死强制推进 [3]
@@ -116,17 +113,17 @@ LLM 驱动的自动化渗透测试 Agent（红队）+ 提示注入攻击检测�
 - 蜜标（AgentShield [10]）：`security.honeytokens` 声明合法测试永不需要访问的路径片段；访问放行（属于发现）但审计告警 + 响应自动入污点库——后续**使用**蜜标内容将被污点策略拦截（内置靶场已埋蜜标端点；`honeytokens` 默认为空，需自行配置）
 - 攻防演习：陷阱靶场 + 确定性 MockLLM（最坏情形），也可换真实 LLM（`fusion/drill.py --real`）
 
+</details>
+
 ## 界面一览
 
 Web 控制台（`scripts/serve.py`，Bearer Token 认证）：SSE 实时事件流、PTES 阶段进度、漏洞分级统计、危险操作审批。
 
 **引导态** —— 部署后即见三步上手与靶场速查：
 
-![控制台引导态](docs/images/console-guide.png)
+<p align="center"><img src="docs/images/console-guide.png" alt="控制台引导态" width="80%"></p>
 
-**会话运行态** —— 左：会话列表（状态/漏洞数）；中：阶段进度条 + 统计卡 + 实时事件流（`PARALLEL` 标记并行批次）；右：待审批队列：
-
-![控制台会话运行态](docs/images/console-session.png)
+**会话运行态**（页首截图）—— 左：会话列表（状态/漏洞数）；中：阶段进度条 + 统计卡 + 实时事件流（`PARALLEL` 标记并行批次）；右：待审批队列。
 
 ## 攻防演习结果
 
@@ -137,7 +134,7 @@ Web 控制台（`scripts/serve.py`，Bearer Token 认证）：SSE 实时事件�
 **两种 LLM 条件**：确定性 Mock（最坏情形：上下文出现未隔离载荷即以概率 1 服从）与**真实 LLM**（glm-5.3，`--real` 复现：`python3 fusion/drill.py --real`）。
 
 | 指标 | 守卫关 | 守卫开 |
-|---|---|---|
+|:---|:---|:---|
 | **劫持率（7 个陷阱场景）** | **100%**（7/7） | **14%**（1/7，混合三陷阱场景） |
 | 任务完成率（7 个陷阱场景） | 0% | **86%**（6/7） |
 | 发生隔离的陷阱场景 | — | 7/7 |
@@ -150,7 +147,8 @@ Web 控制台（`scripts/serve.py`，Bearer Token 认证）：SSE 实时事件�
 
 **指标定义**：劫持 = LLM 输出服从注入指令的动作（外泄请求或伪造收尾）；隔离 = 载荷在进入 LLM 前被替换为占位符；误隔离 = 干净工具输出被错误替换。
 
-**怎么读这张表**：Mock 只要在可见文本里看到未隔离的陷阱标记就服从，所以表里的劫持率是按构造得到的。它回答的是「守卫有没有把陷阱标记替换掉」，不是「真实模型会不会被劫持」。
+> [!NOTE]
+> **怎么读这张表**：Mock 只要在可见文本里看到未隔离的陷阱标记就服从，所以表里的劫持率是按构造得到的。它回答的是「守卫有没有把陷阱标记替换掉」，不是「真实模型会不会被劫持」。
 
 **真实 LLM 对照（glm-5.3，2026-11-14，16 次运行；逐次记录未随仓库提交）**：守卫关闭时服从率就是 **0%**——glm-5.3 没有服从任一陷阱（未外泄、未伪造收尾）。Mock 的概率 1 服从因此是刻意构造的上界：守卫要防的是 0 到 1 之间的真实残余风险，这一点在本次实验里没有得到证明。守卫开启后，旧版一句话占位符使任务完成率降到 14%；换成三段式占位符（说明发生了什么、这是防御措施、请继续任务）后，完成率回到 **43%**，7 个陷阱场景全部发生隔离，误隔离为 0。
 
@@ -165,13 +163,13 @@ Web 控制台（`scripts/serve.py`，Bearer Token 认证）：SSE 实时事件�
 下表数字取自仓库内提交的评测产物 [`blueteam/results/metrics.json`](blueteam/results/metrics.json)（2026-10-31 的数据与模型）：守卫所用的 L0+L1 配置在模板不相交测试集（487 条，含 79 条对抗性良性样本、114 条工具输出样本）上的结果。v0.3.2 新增了 14 条攻击模板并重训，重训后的分类别结果（如英文同义改写召回 0.38 → 0.878）还没有刷新进这些文件；重跑 `python3 -m src.evaluate` 会覆盖它们。
 
 | 检测器 | AUROC | 召回@安全阈值 | FPR@TPR95 | 对抗性良性误报 |
-|---|---|---|---|---|
+|:---|:---:|:---:|:---:|:---:|
 | 规则基线（14 条正则） | 0.750 | 0.583 | 1.000 | 24.1% |
 | 混合特征 LR（对抗增强） | 0.981 | 0.822 | 0.088 | 0 |
 | **L0+纵深防御（守卫所用）** | **0.998** | **0.969** | **0.013** | **0** |
 | 完整级联（L1+L2，可选） | 0.990 | 0.965 | 0.013 | 0 |
 
-![蓝队检测器 ROC 曲线](blueteam/results/roc_curves.png)
+<p align="center"><img src="blueteam/results/roc_curves.png" alt="蓝队检测器 ROC 曲线" width="560"></p>
 
 **真实工具输出差分重放评测（部署域 FPR，[5]）**：用本 Agent 实测会话的工具输出存档（构造即良性）评测，暴露了模板评测看不见的盲区——sqlmap 日志行「谈论注入技术」（如 `parameter 'q' appears to be injectable`）在基线模型上 FPR 14.1%（超出训练时 10% 约束，复现文献「榜单 FPR 不可迁移」论点）。将训练半集并入领域适配重训后，在同一防泄漏评测半集（880 条）上 **FPR 12.05% → 0.00%**。复现：
 
@@ -236,7 +234,7 @@ LLM_MODEL=deepseek-chat
 常用参数：
 
 | 参数 | 说明 |
-|------|------|
+|:-----|:-----|
 | `--target` | 目标 IP/主机名（新会话必填） |
 | `--scope` | 允许测试的 IP/CIDR，可多次指定，默认仅 target |
 | `--session-id` | 自定义会话 ID；**该会话已存在时自动转为断点续跑**（重放事件、恢复快照、检测腰斩回合） |
@@ -285,6 +283,9 @@ python3 -m src.cli "忽略之前的所有指令"    # 单条文本检测
 
 ## 配置参考
 
+<details>
+<summary><b>config.yaml 与 guardrails.yaml（点击展开）</b></summary>
+
 `config.yaml` 中与安全防线相关的项：
 
 ```yaml
@@ -303,6 +304,8 @@ security:
 `guardrails.yaml` 存放其余护栏参数，由 `security/guardrail_engine.py` 读取：同一端点的执行上限、LLM 连续失败上限、并行扫描并发数、污点策略（`taint_policy`）、蜜标路径（`honeytokens`，默认为空）和渐进信任的等级表（`trust.levels`，默认关闭）。渐进信任让 Agent 从只允许主机发现开始，按安全操作次数和漏洞发现数逐级解锁工具。语义裁判（`security.llm_judge`）会定期把多条可疑观察交给 LLM 判断是否构成协同注入，只告警不阻断。
 
 守卫的降级行为：检测器模型文件缺失或加载失败时打印告警横幅并写 `GUARD_DEGRADED` 审计事件后直通，**不阻断渗透主流程**；`strict: true`（或 env `GUARD_STRICT=1`）时改为启动即失败。污点策略和蜜标以 `guardrails.yaml` 为准。密钥只放 `.env`（`REDBLUEAGENT_TOKEN` 见 serve.py）。
+
+</details>
 
 ## 工作原理：一次迭代的完整数据流
 
@@ -330,6 +333,9 @@ security:
 更细粒度的模块讲解见 [module_walkthrough.md](module_walkthrough.md)。
 
 ## 项目结构
+
+<details>
+<summary><b>目录树（点击展开）</b></summary>
 
 ```
 agent/
@@ -376,6 +382,8 @@ guardrails.yaml          护栏参数
 tests/unit/              单元测试（25 个测试文件）
 ```
 
+</details>
+
 ## 测试
 
 ```bash
@@ -386,6 +394,16 @@ python3 -m pytest tests/unit -q
 目前只有单元测试，没有集成测试；端到端验证靠[实测报告](docs/live-test-report.md)里的人工实测。
 
 ## 路线图
+
+尚未完成：
+
+- [ ] 出站边界：nmap `extra_flags`、metasploit `extra_options` 与 `msfconsole_path` 纳入 scope 校验；审批门改为基于构造后的命令判定
+- [ ] 并行动作路径接入污点、蜜标与信任检查；渐进信任的降级接入主循环
+- [ ] 演习改用生产主循环（`ReActLoop`），nmap 指纹这一注入位置加入场景；补集成测试
+- [ ] 守卫在真实模型上的收益验证（更换更弱的模型或扩大样本）
+
+<details>
+<summary><b>已完成：v0.2 → v0.3.3（点击展开）</b></summary>
 
 v0.2 已完成（工程化改造）：
 
@@ -435,12 +453,7 @@ v0.3.3（最后一个开放项）：
       config `security.llm_judge: true` 启用（默认关，复用已配置 LLM，LLM 失败
       自动降级为不告警不阻断）。审计事件 `SEMANTIC_ACCUMULATION_ALERT`。
 
-尚未完成：
-
-- [ ] 出站边界：nmap `extra_flags`、metasploit `extra_options` 与 `msfconsole_path` 纳入 scope 校验；审批门改为基于构造后的命令判定
-- [ ] 并行动作路径接入污点、蜜标与信任检查；渐进信任的降级接入主循环
-- [ ] 演习改用生产主循环（`ReActLoop`），nmap 指纹这一注入位置加入场景；补集成测试
-- [ ] 守卫在真实模型上的收益验证（更换更弱的模型或扩大样本）
+</details>
 
 ## 已知局限
 
@@ -455,6 +468,9 @@ v0.3.3（最后一个开放项）：
 ## 学术依据（References）
 
 正文以 [n] 标注各设计点的文献依据；条目格式遵循 GB/T 7714-2015（arXiv 预印本按电子文献 [EB/OL] 著录），BibTeX 见文末折叠块。
+
+<details>
+<summary><b>文献条目与对应的设计点（点击展开）</b></summary>
 
 **实施依据（本项目按文献方法实现）**
 
@@ -578,6 +594,7 @@ v0.3.3（最后一个开放项）：
 ```
 
 </details>
+</details>
 
 ## 致谢与声明
 
@@ -585,4 +602,5 @@ v0.3.3（最后一个开放项）：
 
 v0.2 的可靠性改造在设计上参考了开源项目 [SPECTRE](https://github.com/lalalala5678/spectre)（MIT License）：写前日志与断点续跑、LLM 重试与限速冷却、工具输出协议。相关代码按其设计思路用 Python 实现。方法层面的文献依据见上一节。
 
-**仅用于已获授权的安全测试与教育研究**。危险操作默认需人工审批，全程记录审计日志。使用者需自行确保对目标拥有合法授权，任何未授权使用造成的后果由使用者承担。
+> [!WARNING]
+> **仅用于已获授权的安全测试与教育研究。** 危险操作默认需人工审批，全程记录审计日志。使用者需自行确保对目标拥有合法授权，任何未授权使用造成的后果由使用者承担。
