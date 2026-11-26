@@ -28,4 +28,6 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - run: pip install -e ".[dev]"
-      - run: python -m pytest tests/unit -q
+      # unit + offline integration tests; the Docker-backed test skips itself
+      # where the agent image is not built
+      - run: python -m pytest tests -q

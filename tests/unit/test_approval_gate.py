@@ -17,8 +17,9 @@ def msf_exploit_action():
 
 
 def nmap_brute_action():
+    # "scripts" is the key nmap's param interpreter reads
     return ActionDecision(
-        tool="nmap", params={"target": "127.0.0.1", "script": "ssh-brute"}
+        tool="nmap", params={"target": "127.0.0.1", "scripts": "ssh-brute"}
     )
 
 
@@ -59,6 +60,9 @@ def test_is_dangerous_patterns():
     # Structured script param must be flagged (semantic check — the literal
     # "--script" regex never matched str(params) of dict values)
     assert gate.is_dangerous(nmap_brute_action()) is True
+    assert gate.is_dangerous(ActionDecision(
+        tool="nmap", params={"target": "127.0.0.1", "scripts": ["default", "ssh-brute"]}
+    )) is True
     # Literal flag text in params still matches via the regex table
     literal_flag = ActionDecision(
         tool="nmap", params={"target": "127.0.0.1", "extra": "--script ssh-dos"}
@@ -68,9 +72,38 @@ def test_is_dangerous_patterns():
     assert gate.is_dangerous(plain_nmap) is False
     # Benign nmap scripts are not dangerous
     benign_script = ActionDecision(
-        tool="nmap", params={"target": "127.0.0.1", "script": "http-title"}
+        tool="nmap", params={"target": "127.0.0.1", "scripts": "http-title"}
     )
     assert gate.is_dangerous(benign_script) is False
+    # "script" (singular) is ignored by the interpreter, so the command line
+    # never carries it: not dangerous, and no approval prompt is needed.
+    stale_key = ActionDecision(
+        tool="nmap", params={"target": "127.0.0.1", "script": "ssh-brute"}
+    )
+    assert gate.is_dangerous(stale_key) is False
+
+
+def test_built_command_reveals_flags_the_interpreter_builds():
+    """The gate judges the command line, not only the model's raw params."""
+    from modules.tool_invocation.invoker import ToolInvoker
+
+    gate = DangerousOperationApprovalGate(interactive=False)
+    invoker = ToolInvoker()
+    # sqlmap's interpreter turns {"os_shell": true} into "--os-shell", a flag
+    # that never appears in the params dict.
+    os_shell = ActionDecision(
+        tool="sqlmap", params={"url": "http://127.0.0.1/x?id=1", "os_shell": True}
+    )
+    assert gate.is_dangerous(os_shell, invoker.preview(os_shell)) is True
+    plain = ActionDecision(tool="sqlmap", params={"url": "http://127.0.0.1/x?id=1"})
+    assert gate.is_dangerous(plain, invoker.preview(plain)) is False
+
+
+def test_auto_approve_scan_reads_the_scripts_key():
+    # list form of "scripts" is classified the same as the comma-string form
+    gate = DangerousOperationApprovalGate(policy="auto-approve-scan")
+    assert gate.request_approval(ActionDecision(
+        tool="nmap", params={"target": "127.0.0.1", "scripts": ["default", "ssh-brute"]})) is True
 
 
 def test_file_mode_approved_via_decision_file(tmp_path, capsys):

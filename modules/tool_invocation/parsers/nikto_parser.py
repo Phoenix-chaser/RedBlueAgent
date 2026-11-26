@@ -44,14 +44,17 @@ class NiktoParser(BaseOutputParser):
         SKIP_PATTERNS = (
             re.compile(r"^\d+\s+request", re.IGNORECASE),   # "239 requests: 0 error(s)..."
             re.compile(r"^\d+\s+host\(s\)", re.IGNORECASE), # "1 host(s) tested"
+            re.compile(r"^\d+\s+items?\s+checked", re.IGNORECASE),  # 2.1.5 的收尾统计行
+            # 否定性结果不是发现："No CGI Directories found (use '-C all' ...)"
+            re.compile(r"^no\b.*\bfound\b", re.IGNORECASE),
         )
 
         for line in stdout.splitlines():
             line = line.strip()
-            # "- Nikto v2.1.6"
-            if line.startswith("- Target"):
-                m = re.search(r"Target.*?:\s*(.+)", line)
-                if m:
+            # "- Target IP: 10.0.0.5"（2.1.6+）/ "+ Target IP: 10.0.0.5"（2.1.5）
+            if re.match(r"^[+-]\s*Target\b", line):
+                m = re.search(r"Target(?:\s+IP|\s+Hostname)?\s*:\s*(.+)", line, re.IGNORECASE)
+                if m and not result["target"]:
                     result["target"] = m.group(1).strip()
             # "+ OSVDB-xxxxx: /path: description"
             elif line.startswith("+") or (line.startswith("-") and "OSVDB" in line):

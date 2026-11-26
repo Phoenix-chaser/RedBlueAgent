@@ -8,7 +8,8 @@
 2. 词级 / 字符级 / 混合线性检测器：C 网格搜索（按 val AUROC）后拟合；
 3. 深度检测器（字符级 Transformer）：同一增强集上训练，val 早停 + 温度校准；
 4. 安全阈值：val FPR ≤ 10% 约束；
-5. 另存一份「无增强」混合模型供鲁棒性消融对比（model_noaug.joblib）。
+5. 另存一份「无增强」混合模型供鲁棒性消融对比（model_noaug.joblib）；
+6. 另存守卫部署包 guard.joblib（见 guard_bundle）。
 
 运行：python3 -m src.train
 """
@@ -22,7 +23,6 @@ import joblib
 import numpy as np
 from sklearn.metrics import roc_auc_score
 
-from src.deep import DeepDetector
 from src.detectors import Ensemble, HybridDetector, build_all
 from src.perturb import PERTURBATIONS
 
@@ -68,18 +68,38 @@ def fit_threshold(det, val_texts, val_labels, key=None):
     return t, tpr, fpr
 
 
+def guard_bundle(dets: dict, thresholds: dict, ens) -> dict:
+    """守卫部署包：与完整 bundle 同构，但不含深度检测器。
+
+    完整 bundle 里的 TextCNN 一反序列化就要 import torch。守卫的部署环境
+    （agent 镜像）只装 sklearn，加载完整 bundle 会整体失败并降级为直通——
+    入站防线静默失效。守卫只用得到规则 ⊕ 混合 LR（L1）和三路软投票（L2），
+    这些都不依赖 torch。
+    """
+    return {"detectors": {k: v for k, v in dets.items() if k != "deep"},
+            "ensemble": ens, "thresholds": thresholds, "guard_only": True}
+
+
 def main() -> None:
+    from src.deep import DeepDetector  # 延迟导入：上面的辅助函数不依赖 torch
+
     MODELS_DIR.mkdir(exist_ok=True)
     train = load_jsonl(ROOT / "data" / "train.jsonl")
     val = load_jsonl(ROOT / "data" / "val.jsonl")
 
     # 领域适配（差分重放 [5]）：真实工具输出良性样本（构造即良性）并入
-    # 训练良性侧——只允许来自训练半集（--split-half），评测半集保持纯净
+    # 训练良性侧——只允许来自训练半集（toolout_bench --split-half），评测半集保持纯净。
+    # 本地收集的 data/extra_benign.jsonl 优先；没有就用仓库自带的那一份
+    # （toolout/extra_benign.jsonl，scripts/collect_tool_outputs.py 对内置靶场收集），
+    # 这样任何克隆跑 run_all.sh 都得到同一个模型。
     extra_path = ROOT / "data" / "extra_benign.jsonl"
+    source = "toolout_bench"
+    if not extra_path.exists():
+        extra_path, source = ROOT / "toolout" / "extra_benign.jsonl", "toolout_bench（仓库自带）"
     if extra_path.exists():
         extra = [json.loads(l) for l in extra_path.read_text(encoding="utf-8").splitlines() if l.strip()]
         train = train + [{"text": s["text"], "label": 0} for s in extra]
-        print(f"[domain-adapt] 并入真实工具输出良性样本 {len(extra)} 条（source=toolout_bench）")
+        print(f"[domain-adapt] 并入真实工具输出良性样本 {len(extra)} 条（source={source}）")
 
     texts = [s["text"] for s in train]
     labels = np.array([s["label"] for s in train])
@@ -136,6 +156,8 @@ def main() -> None:
          "aug": {"prob": AUG_PROB, "n_aug": len(aug) - len(train)}},
         MODELS_DIR / "model.joblib")
     print(f"模型已保存 → {MODELS_DIR / 'model.joblib'}")
+    joblib.dump(guard_bundle(dets, thresholds, ens), MODELS_DIR / "guard.joblib")
+    print(f"守卫部署包已保存 → {MODELS_DIR / 'guard.joblib'}（不含深度检测器，加载无需 torch）")
 
 
 if __name__ == "__main__":

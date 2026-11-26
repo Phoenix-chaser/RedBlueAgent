@@ -2,8 +2,6 @@ context_guard:
   aggregate_min_fields: 5
   aggregate_multiplier: 5
   honeypot_threshold: 2
-  semantic_judge_confidence: 0.7
-  semantic_judge_interval: 5
 dangerous_operations:
 - op: exploit/
   tool: metasploit
@@ -30,6 +28,7 @@ target_param_keys:
 - target
 - url
 - host
+- ip
 - rhosts
 trust:
   downgrade_on:
@@ -49,6 +48,7 @@ trust:
     - nmap
     - nikto
     - dirsearch
+    - read_url
     description: 主动扫描（端口/服务/Web 目录）
     level: 1
     name: active_scan
@@ -59,6 +59,7 @@ trust:
     - nmap
     - nikto
     - dirsearch
+    - read_url
     - sqlmap
     description: 受控利用（SQL 注入测试）
     level: 2

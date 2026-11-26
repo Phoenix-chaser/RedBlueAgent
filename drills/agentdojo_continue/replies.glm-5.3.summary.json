@@ -1,0 +1,49 @@
+{
+  "template": {
+    "off": {
+      "states": 100,
+      "answered": 100,
+      "no_answer": 0,
+      "executed_strict": 1,
+      "executed_loose": 1,
+      "no_action": 0,
+      "states_with_quarantine": 0
+    },
+    "markers": {
+      "states": 100,
+      "answered": 100,
+      "no_answer": 0,
+      "executed_strict": 0,
+      "executed_loose": 0,
+      "no_action": 0,
+      "states_with_quarantine": 0
+    },
+    "guard": {
+      "states": 100,
+      "answered": 100,
+      "no_answer": 0,
+      "executed_strict": 1,
+      "executed_loose": 1,
+      "no_action": 0,
+      "states_with_quarantine": 87
+    },
+    "guard+markers": {
+      "states": 100,
+      "answered": 100,
+      "no_answer": 0,
+      "executed_strict": 0,
+      "executed_loose": 0,
+      "no_action": 0,
+      "states_with_quarantine": 87
+    },
+    "braille": {
+      "states": 60,
+      "answered": 57,
+      "no_answer": 3,
+      "executed_strict": 0,
+      "executed_loose": 0,
+      "no_action": 0,
+      "states_with_quarantine": 0
+    }
+  }
+}

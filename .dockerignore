@@ -10,3 +10,8 @@ blueteam/results
 blueteam/models
 *.egg-info
 docs
+# 密钥文件绝不进镜像（.env 在仓库根目录，COPY . 时会被带走）
+.env
+.env.*
+!.env.example
+*.key

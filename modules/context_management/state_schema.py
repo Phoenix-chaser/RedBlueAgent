@@ -194,6 +194,13 @@ class ToolResult(BaseModel):
     success: bool = True
     elapsed_seconds: float = 0.0
     error_message: str | None = None
+    # 预留给运行时注册的外部工具：它的错误信息里带着工具输出或异常的原文（stderr、
+    # 取回失败的原因、异常消息），可能被目标影响，守卫整条送检。没带时，错误信息
+    # 是 harness 自己写的（参数解释器的纠错提示、超时与缺依赖的说明），只过不看
+    # 检测分的规则：这些提示在检测器眼里就是「指令」，实测有 4 条过线，送检等于
+    # 把纠错提示换成占位符。项目自带的工具不设这个标记——它们把原文按行放进
+    # parsed["tool_error"]，渲染在不可信标记之内，由守卫逐行检查。
+    error_has_raw_text: bool = False
     timestamp: datetime = Field(default_factory=datetime.utcnow)
     # 完整原始输出的存档路径（seq 补全的廉价等价物）：截断发生时 LLM 仍
     # 知道全文去向。由 react_loop 调用 EventLog.save_tool_output 填充。

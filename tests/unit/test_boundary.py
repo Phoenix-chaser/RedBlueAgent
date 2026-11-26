@@ -97,3 +97,35 @@ def test_second_target_param_also_checked():
         params={"target": "192.168.1.100", "url": "http://evil.example/"},
     )
     assert controller.validate(action, make_state()) is False
+
+
+def test_ip_alias_is_scope_checked():
+    """nmap's interpreter reads "ip" as an alias of "target". The boundary must
+    check that alias too, or an out-of-scope host can ride it."""
+    controller, audit = make_controller()
+    assert controller.validate(
+        ActionDecision(tool="nmap", params={"ip": "10.99.99.99"}), make_state()) is False
+    assert "VIOLATION:SCOPE_VIOLATION" in audit.events
+    assert controller.last_violation == "SCOPE_VIOLATION"
+
+    controller, _ = make_controller()
+    assert controller.validate(
+        ActionDecision(tool="nmap", params={"ip": "192.168.1.100"}), make_state()) is True
+    assert controller.last_violation is None
+
+
+def test_built_command_reaches_the_approval_gate():
+    """validate() forwards the built command, so a flag the interpreter builds
+    from structured params is judged; the reason is left in last_violation."""
+    from modules.tool_invocation.invoker import ToolInvoker
+
+    controller, audit = make_controller()  # approval policy: reject
+    action = ActionDecision(
+        tool="sqlmap", params={"url": "http://192.168.1.100/x?id=1", "os_shell": True})
+    command = ToolInvoker().preview(action)
+    assert "--os-shell" in command
+    assert controller.validate(action, make_state(), command) is False
+    assert audit.events == ["APPROVAL:False"]
+    assert controller.last_violation == "APPROVAL_DENIED"
+    # Without the built command the gate only sees "os_shell" in the params.
+    assert controller.validate(action, make_state()) is True

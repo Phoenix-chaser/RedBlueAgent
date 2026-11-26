@@ -138,15 +138,17 @@ def _create_anthropic(model, api_key, max_tokens, temperature, **kwargs):
     from agent.llm_kernel import MinimalLLMClient
     return MinimalLLMClient(
         provider="anthropic", model=model, api_key=api_key,
-        max_tokens=max_tokens, temperature=temperature)
+        max_tokens=max_tokens, temperature=temperature, **kwargs)
 
 
 def _create_openai_compat(model, api_key, base_url, max_tokens, temperature, **kwargs):
-    """统一走极简内核的 OpenAI 兼容协议（DeepSeek / Kimi / GLM / OpenAI 通用）。"""
+    """统一走极简内核的 OpenAI 兼容协议（DeepSeek / Kimi / GLM / OpenAI 通用）。
+
+    kwargs 透传给内核（如 max_retries）——以前在这里被悄悄丢掉。"""
     from agent.llm_kernel import MinimalLLMClient
     return MinimalLLMClient(
         provider="openai", model=model, api_key=api_key, base_url=base_url,
-        max_tokens=max_tokens, temperature=temperature)
+        max_tokens=max_tokens, temperature=temperature, **kwargs)
 
 
 def _detect_provider() -> str:

@@ -13,6 +13,10 @@ Policies:
 
 Policy source priority: constructor arg > env SECURITY_APPROVAL_POLICY >
 config security.approval_policy > auto (interactive on TTY, reject headless).
+
+Which operations count as dangerous comes from guardrails.yaml
+(`dangerous_operations`, `scan_flavored_exempt`) via GuardrailEngine; without
+a policy file the built-in lists below apply.
 """
 from __future__ import annotations
 
@@ -34,6 +38,18 @@ ALWAYS_REQUIRE_APPROVAL = [
 
 VALID_POLICIES = ("interactive", "reject", "auto-approve-scan", "file")
 
+# nmap scripts whose name contains one of these keywords — and neither "dos"
+# nor "exploit" — are scan-flavored: auto-approve-scan may clear them.
+DEFAULT_SCAN_FLAVORED = ("brute", "auth", "discovery")
+
+
+def _scan_flavored_keywords(entries) -> tuple[str, ...]:
+    """Read the "tool:keyword" list of a policy file; fall back to the default."""
+    keywords = tuple(
+        entry.split(":", 1)[1] for entry in entries or []
+        if isinstance(entry, str) and ":" in entry and entry.split(":", 1)[0] == "nmap")
+    return keywords or DEFAULT_SCAN_FLAVORED
+
 
 class DangerousOperationApprovalGate:
     """
@@ -51,6 +67,8 @@ class DangerousOperationApprovalGate:
         approvals_dir: str = "data/approvals",
         poll_timeout: float = 300.0,
         poll_interval: float = 2.0,
+        dangerous_patterns: list[tuple[str, str]] | None = None,
+        scan_flavored: list[str] | None = None,
     ):
         if policy is None:
             policy = "interactive" if interactive else "reject"
@@ -65,32 +83,45 @@ class DangerousOperationApprovalGate:
         self.poll_interval = poll_interval
         self._session_id = "session"
         self._request_counter = 0
+        # (tool_pattern, op_pattern) regex pairs. An absent or empty policy falls
+        # back to the built-in list: an empty file must not disable the gate.
+        self.dangerous_patterns = [tuple(p) for p in dangerous_patterns or []] or ALWAYS_REQUIRE_APPROVAL
+        self.scan_flavored = _scan_flavored_keywords(scan_flavored)
 
     def set_session(self, session_id: str) -> None:
         """Give the gate the session id (names the file-mode request dirs)."""
         if session_id:
             self._session_id = session_id
 
-    def is_dangerous(self, action: Any) -> bool:
+    def is_dangerous(self, action: Any, command: str = "") -> bool:
+        """Decide whether an action needs explicit human approval.
+
+        `command` is the text the tool would execute (ToolInvoker.preview). The
+        patterns are matched against it too, so a flag the interpreter builds —
+        "--os-shell" from {"os_shell": true} — is seen even though it never
+        appears in the model's raw params.
+        """
         tool = (getattr(action, "tool", "") or "").lower()
         params = getattr(action, "params", {}) or {}
-        params_str = str(params)
-        cmd = getattr(action, "_cmd_str", "")
-        combined = f"{tool} {params_str} {cmd}".lower()
+        combined = f"{tool} {params} {command}".lower()
 
-        for tool_pattern, op_pattern in ALWAYS_REQUIRE_APPROVAL:
+        for tool_pattern, op_pattern in self.dangerous_patterns:
             if re.search(tool_pattern, combined) and re.search(op_pattern, combined):
                 return True
 
-        # Semantic check: the patterns above match literal command flags, but
-        # the params dict carries structured values — {"script": "ssh-brute"}
-        # never contains the text "--script", so dangerous nmap scripts used
-        # to slip past the gate entirely.
-        if tool == "nmap":
-            script = str(params.get("script", "") or "").lower()
-            if script and re.search(r"(exploit|brute|dos)", script):
-                return True
+        # Fallback for callers that have no built command: the params dict
+        # carries structured values, so {"scripts": "ssh-brute"} never contains
+        # the text "--script". "scripts" is the key nmap's interpreter reads.
+        if tool == "nmap" and re.search(r"(exploit|brute|dos)", self._nmap_scripts(params)):
+            return True
         return False
+
+    @staticmethod
+    def _nmap_scripts(params: dict) -> str:
+        scripts = params.get("scripts", "") or ""
+        if isinstance(scripts, (list, tuple, set)):
+            scripts = ",".join(str(s) for s in scripts)
+        return str(scripts).lower()
 
     def _is_scan_flavored(self, action: Any) -> bool:
         """Scan-flavored dangerous op: nmap brute/auth script scans.
@@ -102,12 +133,13 @@ class DangerousOperationApprovalGate:
         params = getattr(action, "params", {}) or {}
         if tool != "nmap":
             return False
-        script = str(params.get("script", "") or "").lower()
+        script = self._nmap_scripts(params)
         if not script:
             return False
         return (
-            "brute" in script or "auth" in script or "discovery" in script
-        ) and not any(x in script for x in ("dos", "exploit"))
+            any(keyword in script for keyword in self.scan_flavored)
+            and not any(x in script for x in ("dos", "exploit"))
+        )
 
     def request_approval(self, action: Any) -> bool:
         if not self.require_approval:

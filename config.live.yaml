@@ -8,6 +8,7 @@ llm:
   base_url: https://open.bigmodel.cn/api/coding/paas/v4
   max_tokens: 8192
   temperature: 0.1
+  max_retries: 8               # 无人值守：429/5xx 的重试预算（默认 3 次约 35 秒）
   context_window_budget: 6000   # 低阈值：强制中途触发历史压缩
   keep_recent_turns: 8
 

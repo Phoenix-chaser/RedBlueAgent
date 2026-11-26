@@ -5,7 +5,9 @@
   基线    rules
   单模型  word / char / hybrid / deep(字符TextCNN)
   融合    ensemble（三路线性软投票）/ stack（堆叠元学习器）
-  架构    scan_defense（L0解码 + 规则⊕混合）/ cascade（L1+L2级联）
+  架构    scan_defense（L0解码 + 规则⊕无增强混合，级联的 L1）
+          scan_guard（L0解码 + 规则⊕增强混合，守卫默认部署的那一组）
+          cascade（L1+L2级联）
 
 指标口径：
 - AUROC / AP（1,000 次自助 95% CI）
@@ -48,6 +50,7 @@ plt.rcParams.update({
 LABELS = {"rules": "规则基线", "word": "词级 TF-IDF+LR", "char": "字符 n-gram+LR",
           "hybrid": "混合特征 LR", "ensemble": "三路软投票", "deep": "字符 TextCNN",
           "stack": "堆叠元学习器", "scan_defense": "L0+纵深防御(L1)",
+          "scan_guard": "守卫默认部署(L0+规则⊕增强hybrid)",
           "cascade": "级联（L1+L2）"}
 
 
@@ -127,6 +130,12 @@ def main() -> None:
         thr = security_threshold(
             val_labels, np.array([p[1] for p in det.predict_proba(val_texts)]))
         variants[key] = (det, thr)
+    # 守卫默认部署的那一组：规则 ⊕ 对抗增强 hybrid，阈值取模型自带的——与
+    # security/context_guard.py 加载的完全一致。它和上面级联 L1 的无增强 hybrid
+    # 不是同一个模型，表里必须各占一行，否则「守卫所用」的数字对不上守卫。
+    scan_guard = DeobfuscatedScan(
+        Defense(dets["rules"], dets["hybrid"], thresholds["hybrid"]))
+    variants["scan_guard"] = (scan_guard, thresholds["hybrid"])
 
     # ── 主表 ──
     rows = []

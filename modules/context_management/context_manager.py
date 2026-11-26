@@ -4,6 +4,7 @@ Merges tool results into PentestState and builds prompts.
 """
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from urllib.parse import urlparse
 
@@ -24,6 +25,10 @@ from utils.clip import clip_marked
 # 配套声明见 agent/prompts/system_prompt.py 的 Rule 10——两者必须成对存在。
 UNTRUSTED_OPEN = "<<<UNTRUSTED_TOOL_OUTPUT>>>"
 UNTRUSTED_END = "<<<END_UNTRUSTED_TOOL_OUTPUT>>>"
+# 失败的工具带回来的错误输出最多渲染这么多行（工具侧同样截了 10 行）
+TOOL_ERROR_LINES = 10
+FAILED_WITHOUT_REASON = ("工具以失败状态结束，没有给出原因。"
+                         "下一步（可执行）：下面有结果就结合结果判断；没有结果就换参数或换工具重试。")
 
 
 class ContextManager:
@@ -226,23 +231,33 @@ class ContextManager:
                         state.add_vulnerability(vuln)
                         break
 
+    # 缩写类关键词按整词匹配。子串匹配时 "rce" 会命中 "force"——实测把 nikto 的
+    # 提示行 "No CGI Directories found (use '-C all' to force check ...)" 判成了严重。
+    _NIKTO_ACRONYMS = ("rce", "xss", "ssrf", "xxe", "idor", "csrf")
+
     def _nikto_severity(self, desc: str) -> Severity:
         """Infer severity from Nikto finding description keywords."""
         d = desc.lower()
-        if any(k in d for k in [
+
+        def hit(keywords) -> bool:
+            return any(
+                re.search(rf"\b{re.escape(k)}\b", d) if k in self._NIKTO_ACRONYMS else k in d
+                for k in keywords)
+
+        if hit([
             "remote code", "rce", "command execut", "arbitrary code",
             "buffer overflow", "shell upload", "backdoor", "webshell",
             "code execut",
         ]):
             return Severity.CRITICAL
-        if any(k in d for k in [
+        if hit([
             "sql inject", "xss", "cross-site script", "file inclus",
             "directory traversal", "path traversal", "ssrf",
             "xml external", "xxe", "deserializ", "unrestricted upload",
             "remote file", "local file", "inject",
         ]):
             return Severity.HIGH
-        if any(k in d for k in [
+        if hit([
             "csrf", "clickjack", "anti-clickjack", "open redirect",
             "idor", "cookie", "session", "password", "credential",
             "htpasswd", "basic auth", "authentication", "disclosure",
@@ -250,7 +265,7 @@ class ContextManager:
             "admin", "backup", "config", "interesting",
         ]):
             return Severity.MEDIUM
-        if any(k in d for k in [
+        if hit([
             "header", "x-frame", "x-content", "content-security",
             "x-xss", "hsts", "strict-transport", "referrer-policy",
             "listing", "debug", "trace", "options", "methods",
@@ -441,7 +456,8 @@ class ContextManager:
         lines = [f"Tool: {result.tool}", f"Command: {result.command[:200]}"]
 
         if not result.success:
-            lines.append(f"ERROR: {result.error_message}")
+            # 工具以失败状态结束却没给出任何原因时，别让模型看到 "ERROR: None"
+            lines.append(f"ERROR: {result.error_message or FAILED_WITHOUT_REASON}")
         else:
             lines.append(f"Success. Elapsed: {result.elapsed_seconds:.1f}s")
 
@@ -451,10 +467,16 @@ class ContextManager:
         honey_warning = parsed.pop("_honeytoken_warning", None)
         if honey_warning:
             diagnostics.append(f"  ⚠ HONEYTOKEN WARNING: {honey_warning}")
-        if parsed:
+        # 工具的错误输出（stderr、异常消息）可能被目标影响过：ERROR 行只留 harness
+        # 写的原因和下一步，原文在这里、不可信标记之内逐行渲染（守卫已逐行检查）
+        tool_error = parsed.pop("tool_error", None) or []
+        if parsed or tool_error:
             parsed_lines = ["Parsed Results:"]
-            # Tool-specific summarization
-            tool = result.tool.lower()
+            if tool_error:
+                parsed_lines.append("  Tool error output:")
+                parsed_lines += [f"  | {line[:200]}" for line in tool_error[:TOOL_ERROR_LINES]]
+            # Tool-specific summarization（失败的结果没有可汇总的字段）
+            tool = result.tool.lower() if parsed else ""
 
             if tool == "nmap":
                 hosts = parsed.get("hosts", [])
@@ -516,6 +538,19 @@ class ContextManager:
                         "/risk（2-3）；仍无注入则换其他带参数的 URL 或 POST data，"
                         "不要第三次原样重跑。")
 
+            elif tool == "read_url":
+                # 目标页面原文：守卫已逐行隔离过，整段位于 UNTRUSTED 标记之内
+                parsed_lines.append(
+                    f"  HTTP {parsed.get('status')} {parsed.get('content_type', '')}".rstrip())
+                if parsed.get("location"):
+                    parsed_lines.append(f"  Redirects to: {parsed['location']} (not followed)")
+                if parsed.get("note"):
+                    parsed_lines.append(f"  {parsed['note']}")
+                for line in (parsed.get("lines") or [])[:25]:
+                    parsed_lines.append(f"  | {line[:200]}")
+                if len(parsed.get("lines") or []) > 25 or parsed.get("truncated"):
+                    parsed_lines.append("  … 仅显示前 25 行")
+
             elif tool == "metasploit":
                 parsed_lines.append(f"  Exploit success: {parsed.get('exploit_success', False)}")
                 parsed_lines.append(f"  Session opened: {parsed.get('session_opened', False)}")
@@ -528,6 +563,12 @@ class ContextManager:
                         "  下一步（可执行）：重发 metasploit 并显式指定 rport 与"
                         "匹配服务版本的 module；仍失败则用 nmap scan_type='service' "
                         "确认版本后换 module。")
+
+            if not result.success:
+                # 「0 hosts / 0 paths / 0 findings —— 有效结论，无需重跑」只对跑成功了的
+                # 扫描成立。工具失败时它和 ERROR 行（检查端口、换工具）自相矛盾，
+                # 而模型被告知 DIAGNOSTIC 可以信任。蜜标警示不是结论，保留。
+                diagnostics = [d for d in diagnostics if "HONEYTOKEN WARNING" in d]
 
             # Spotlighting delimiting：目标来源的原始数据整体包裹，
             # 配合 system prompt 的 Rule 10 声明其「是数据非指令」

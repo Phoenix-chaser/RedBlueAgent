@@ -15,7 +15,7 @@ import yaml
 
 # 默认值（guardrails.yaml 缺失或键缺失时的兜底——与 v0.3.3 行为一致）
 _DEFAULTS = {
-    "target_param_keys": ["target", "url", "host", "rhosts"],
+    "target_param_keys": ["target", "url", "host", "ip", "rhosts"],
     "dangerous_operations": [
         {"tool": "metasploit", "op": "exploit/"},
         {"tool": "sqlmap", "op": "--os-shell"},
@@ -32,8 +32,6 @@ _DEFAULTS = {
         "honeypot_threshold": 2,
         "aggregate_multiplier": 5,
         "aggregate_min_fields": 5,
-        "semantic_judge_interval": 5,
-        "semantic_judge_confidence": 0.7,
     },
     "semantic_judge": {"enabled": False, "interval": 5, "confidence_threshold": 0.7},
     "trust": {
@@ -43,10 +41,10 @@ _DEFAULTS = {
              "allowed_tools": ["nmap:host_discovery"],
              "upgrade_after": {"safe_iterations": 3}},
             {"level": 1, "name": "active_scan",
-             "allowed_tools": ["nmap", "nikto", "dirsearch"],
-             "upgrade_after": {"safe_iterations": 10}},
+            "allowed_tools": ["nmap", "nikto", "dirsearch", "read_url"],
+            "upgrade_after": {"safe_iterations": 10}},
             {"level": 2, "name": "exploitation",
-             "allowed_tools": ["nmap", "nikto", "dirsearch", "sqlmap"],
+             "allowed_tools": ["nmap", "nikto", "dirsearch", "read_url", "sqlmap"],
              "upgrade_after": {"vulnerabilities_found": 1}},
             {"level": 3, "name": "full_access", "allowed_tools": ["*"]},
         ],
@@ -69,6 +67,7 @@ class GuardrailEngine:
     def __init__(self, policy_path: str | Path = "guardrails.yaml"):
         self.policy_path = Path(policy_path)
         self._policy: dict = {}
+        self._overrides: dict = {}   # config.yaml 里显式写出的值，优先于策略文件
         self.reload()
 
     def reload(self) -> None:
@@ -79,6 +78,17 @@ class GuardrailEngine:
         else:
             # 文件不存在 → 用默认值（向后兼容无 guardrails.yaml 的部署）
             self._policy = dict(_DEFAULTS)
+        self._policy.update(self._overrides)
+
+    def apply_overrides(self, **overrides) -> None:
+        """让运行配置（config.yaml）里显式写出的值优先于策略文件。
+
+        只接收显式写出的值：None 和空列表都算"没有配置"，不会清掉策略文件里的蜜标。
+        reload() 之后覆盖仍然有效。
+        """
+        self._overrides.update(
+            {k: v for k, v in overrides.items() if v is not None and v != []})
+        self._policy.update(self._overrides)
 
     @staticmethod
     def _merge(base: dict, override: dict) -> dict:

@@ -1,9 +1,10 @@
 """Unit tests for the session WAL: EventLog, SessionLock, replay (P1-1).
 
-Covers the persistence contract adopted from 业界实践:
+Covers the persistence contract adopted from SPECTRE (lalalala5678/spectre, MIT License):
 fsync-before-ack, torn-tail tolerance, fatal mid-file corruption,
 snapshot+tail replay, interrupted-turn (腰斩) detection, instance locking.
 """
+import json
 import os
 import subprocess
 import sys
@@ -254,8 +255,65 @@ def test_collect_action_hashes_covers_pre_snapshot_history():
         {"seq": 4, "t": "action", "d": {"thought": "b", "action": {
             "type": "tool", "tool": "nikto", "params": {"target": "http://192.168.1.100"}}}},
     ]
+    # nmap (pre-snapshot) is kept; the nikto at seq=4 was never observed, and
+    # nikto is read-only, so it is allowed to run again — see the next test
+    assert len(collect_action_hashes(events)) == 1
+
+
+def _log_with_a_cut_off_batch():
+    """A live run (graceful stop): a parallel batch was logged, then SIGTERM
+    arrived before any of its observations were written."""
+    batch = [
+        {"type": "tool", "tool": "nmap", "params": {"target": "192.168.1.100", "scan_type": "full"}},
+        {"type": "tool", "tool": "nikto", "params": {"target": "http://192.168.1.100"}},
+        {"type": "tool", "tool": "dirsearch", "params": {"target": "http://192.168.1.100"}},
+    ]
+    return [
+        {"seq": 1, "t": "start", "d": {"target": "t", "scope": ["t"]}},
+        {"seq": 2, "t": "action", "d": {"thought": "a", "parallel": True, "action": batch[0]}},
+        {"seq": 3, "t": "action", "d": {"thought": "a", "parallel": True, "action": batch[1]}},
+        {"seq": 4, "t": "action", "d": {"thought": "a", "parallel": True, "action": batch[2]}},
+    ]
+
+
+def test_a_lost_read_only_scan_may_be_run_again_after_resume():
+    """The results of the cut-off batch are gone. Blocking the identical scan
+    would leave the agent no way to get them back (seen live: the report then
+    carried a single finding)."""
+    from agent.session_log import collect_action_hashes, unobserved_actions
+    events = _log_with_a_cut_off_batch()
+
+    lost = unobserved_actions(events)
+    assert [a["tool"] for a in lost] == ["nmap", "nikto", "dirsearch"]
+    assert collect_action_hashes(events) == set()
+
+
+def test_an_interrupted_exploit_is_still_blocked_from_repeating():
+    from agent.session_log import collect_action_hashes, unobserved_actions
+    events = _log_with_a_cut_off_batch() + [
+        {"seq": 5, "t": "action", "d": {"thought": "x", "action": {
+            "type": "tool", "tool": "sqlmap",
+            "params": {"url": "http://192.168.1.100/login", "os_shell": True}}}},
+    ]
+
+    assert [a["tool"] for a in unobserved_actions(events)] == ["nmap", "nikto", "dirsearch", "sqlmap"]
     hashes = collect_action_hashes(events)
-    assert len(hashes) == 2  # nmap (pre-snapshot) + nikto (post-snapshot)
+    assert len(hashes) == 1 and hash((
+        "sqlmap", json.dumps({"url": "http://192.168.1.100/login", "os_shell": True},
+                             sort_keys=True, ensure_ascii=False))) in hashes
+
+
+def test_an_action_observed_once_counts_as_observed():
+    """The guard exists to stop verbatim repeats of scans that did return."""
+    from agent.session_log import collect_action_hashes, unobserved_actions
+    scan = {"type": "tool", "tool": "nmap", "params": {"target": "192.168.1.100"}}
+    events = [
+        {"seq": 1, "t": "action", "d": {"action": dict(scan)}},
+        {"seq": 2, "t": "observation", "d": {"action": dict(scan), "kind": "text", "payload": "ok"}},
+        {"seq": 3, "t": "action", "d": {"action": dict(scan)}},      # second run, cut off
+    ]
+    assert unobserved_actions(events) == []
+    assert len(collect_action_hashes(events)) == 1
 
 
 def test_endpoint_key_ignores_query_and_scheme():

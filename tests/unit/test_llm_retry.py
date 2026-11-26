@@ -197,3 +197,44 @@ def test_loop_counter_resets_on_success():
     assert state.current_stage.value == "report_generation"
     assert len(state.llm_turns) == 3
     assert "系统注记" in state.llm_turns[1].observation
+
+# -- agent: the retry budget is a configuration knob ------------------------
+
+
+def _agent_with_llm_config(tmp_path, monkeypatch, llm_cfg):
+    import yaml
+    from agent.core import PentestAgent
+    monkeypatch.setenv("LLM_PROVIDER", "deepseek")
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+    config = tmp_path / "config.yaml"
+    config.write_text(yaml.safe_dump({
+        "llm": llm_cfg,
+        "storage": {"audit_log": str(tmp_path / "audit.log"),
+                    "sessions_dir": str(tmp_path / "sessions"),
+                    "reports_dir": str(tmp_path / "reports")},
+    }), encoding="utf-8")
+    return PentestAgent(config_path=str(config), interactive=False)
+
+
+@pytest.mark.parametrize("llm_cfg, env, expected", [
+    ({}, None, 3),          # nothing set: the kernel's own default
+    ({"max_retries": 8}, None, 8),
+    ({}, "5", 5),           # environment variable wins, like LLM_MAX_TOKENS
+    ({"max_retries": 8}, "5", 5),
+])
+def test_transient_retry_count_is_configurable(tmp_path, monkeypatch, llm_cfg, env, expected):
+    """A busy endpoint answers 429 for tens of seconds at a time. The default
+    three retries (~35 s) suit an interactive run; an unattended one needs more."""
+    monkeypatch.delenv("LLM_MAX_RETRIES", raising=False)
+    if env:
+        monkeypatch.setenv("LLM_MAX_RETRIES", env)
+    agent = _agent_with_llm_config(tmp_path, monkeypatch, llm_cfg)
+    assert agent.llm.max_retries == expected
+
+
+def test_more_retries_ride_out_a_long_busy_spell(monkeypatch):
+    client, sleeps = make_client(max_retries=8)
+    resp, n = invoke_with(
+        monkeypatch, [http_error(429)] * 6 + [FakeResponse(OK_BODY)], client)
+    assert resp.content == "pong" and n == 7
+    assert sleeps == [5.0, 10.0, 20.0, 40.0, 60.0, 60.0]

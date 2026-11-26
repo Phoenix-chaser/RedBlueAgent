@@ -57,7 +57,10 @@ class NmapParamInterpreter:
       ports              "22,80" | "1-1000" | [22, 80] | 80
       scripts            comma string or list; filtered against VALID_SCRIPTS
       timing             1-5 (or "T4"); only applied when scan_type leaves it open
-      extra_flags        list of raw flags appended verbatim
+
+    There is deliberately no raw-flag passthrough: every argv element is built
+    from a validated param, so the scope check on `target` covers every host
+    nmap is pointed at and the script whitelist cannot be bypassed.
     """
 
     def build(self, params: dict) -> list[str]:
@@ -79,9 +82,6 @@ class NmapParamInterpreter:
             t = str(timing).strip().lstrip("Tt")
             if t.isdigit() and 1 <= int(t) <= 5:
                 cmd.append(f"-T{t}")
-
-        for flag in params.get("extra_flags", []) or []:
-            cmd.append(str(flag))
 
         cmd.append(target)
         return cmd

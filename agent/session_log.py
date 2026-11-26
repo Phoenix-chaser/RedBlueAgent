@@ -1,7 +1,7 @@
 """
 SessionEventLog - append-only event journal + snapshots + instance lock.
 
-WAL discipline adopted from 业界实践:
+WAL discipline adopted from SPECTRE (lalalala5678/spectre, MIT License, backend/src/persist.mjs):
 - The "action" event is flushed+fsynced BEFORE the tool subprocess runs, so a
   crash can never lose the record of a side effect that already happened
   (write-ahead: journal first, side effect second).
@@ -141,12 +141,18 @@ class EventLog:
         payload = json.loads(snap.read_text(encoding="utf-8"))
         return PentestState(**payload["state"]), int(payload["events_seq"])
 
-    def save_tool_output(self, result, iteration: int) -> str:
+    def save_tool_output(self, result, iteration: int, raw_output=None) -> str:
         """Archive the full raw output of one tool run; returns the path.
 
         The truncated marker the LLM sees points here — the cheap local
-        equivalent of 业界实践's seq-completion channel.
+        equivalent of SPECTRE's seq-completion channel.
+
+        raw_output is the (stdout, stderr) the tool produced, taken before the
+        guard touched the result. The archive is evidence for a human reader,
+        so it must hold what the target actually sent; what the guard left in
+        the result is what the LLM sees, not what happened.
         """
+        stdout, stderr = raw_output if raw_output is not None else (result.raw_stdout, result.raw_stderr)
         out_dir = self.session_dir / "tool_outputs"
         out_dir.mkdir(parents=True, exist_ok=True)
         safe_tool = "".join(c if c.isalnum() or c in "-_" else "_" for c in result.tool)
@@ -154,8 +160,8 @@ class EventLog:
         path.write_text(
             f"# tool: {result.tool}\n# iteration: {iteration}\n"
             f"# command: {result.command}\n\n"
-            f"## stdout ({len(result.raw_stdout)} chars)\n{result.raw_stdout}\n\n"
-            f"## stderr ({len(result.raw_stderr)} chars)\n{result.raw_stderr}\n",
+            f"## stdout ({len(stdout)} chars)\n{stdout}\n\n"
+            f"## stderr ({len(stderr)} chars)\n{stderr}\n",
             encoding="utf-8",
         )
         return str(path)
@@ -204,29 +210,58 @@ class SessionLock:
 
 # -- replay -----------------------------------------------------------------
 
+# 没有副作用的工具：结果丢了只能原样重跑，所以不进重复拦截集合
+READ_ONLY_TOOLS = frozenset({"nmap", "nikto", "dirsearch", "read_url"})
+
+
+def _action_key(action: dict) -> str:
+    return json.dumps(
+        [action.get("tool"), action.get("params") or {}], sort_keys=True, ensure_ascii=False)
+
+
+def unobserved_actions(events: list[dict]) -> list[dict]:
+    """已落账却没有任何观察结果的动作——进程在工具运行期间中断，结果丢了。
+
+    一个动作只要在日志里有对应的 observation 事件（动作字典完全相同）就算
+    观察过；同一命令历史上跑过多次时，只要有一次有结果，其余的同名动作也
+    视为观察过（重复拦截要拦的正是这种）。
+    """
+    observed = {
+        _action_key(a) for e in events if e.get("t") == "observation"
+        for a in [(e.get("d") or {}).get("action") or {}] if a.get("tool")}
+    return [
+        a for e in events if e.get("t") == "action"
+        for a in [(e.get("d") or {}).get("action") or {}]
+        if a.get("tool") and _action_key(a) not in observed
+    ]
+
 
 def collect_action_hashes(events: list[dict]) -> set[int]:
-    """Hashes of EVERY executed action (whole log, not just post-snapshot).
+    """Hashes of EVERY observed action (whole log, not just post-snapshot).
 
     The no-repeat guard must survive resume even when the snapshot boundary
     sits before actions whose hashes were never persisted anywhere else —
     found in live test M2 (snapshot at seq=7 lost the hashes of seq<=7 actions).
+
+    An action that was logged but never observed is left out when its tool is
+    read-only (READ_ONLY_TOOLS): its result was lost to the interruption, and
+    running the same scan again is the only way to get it back. Seen in a live
+    run — a nmap/nikto/dirsearch batch was cut off by SIGTERM, and after resume
+    the model could not recover the scans. Exploit-class tools stay in the set:
+    an interrupted sqlmap/metasploit run may already have had side effects.
     """
+    lost = {_action_key(a) for a in unobserved_actions(events)}
     hashes: set[int] = set()
     for e in events:
         if e.get("t") != "action":
             continue
         a = (e.get("d") or {}).get("action") or {}
         tool = a.get("tool")
-        if tool:
-            hashes.add(
-                hash(
-                    (
-                        tool,
-                        json.dumps(a.get("params") or {}, sort_keys=True, ensure_ascii=False),
-                    )
-                )
-            )
+        if not tool:
+            continue
+        if tool.lower() in READ_ONLY_TOOLS and _action_key(a) in lost:
+            continue
+        hashes.add(hash((tool, json.dumps(a.get("params") or {}, sort_keys=True, ensure_ascii=False))))
     return hashes
 
 

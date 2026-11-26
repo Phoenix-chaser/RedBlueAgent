@@ -6,11 +6,14 @@ import pytest
 
 
 from modules.tool_invocation.params.common import ParamError, as_bool, as_int
+from modules.context_management.state_schema import ActionDecision
 from modules.tool_invocation.params.nmap_params import NmapParamInterpreter
 from modules.tool_invocation.params.dirsearch_params import DirsearchParamInterpreter
 from modules.tool_invocation.params.nikto_params import NiktoParamInterpreter
 from modules.tool_invocation.params.sqlmap_params import SqlmapParamInterpreter
 from modules.tool_invocation.params.metasploit_params import MetasploitParamInterpreter
+from modules.tool_invocation.executor import RawOutput, SubprocessExecutor
+from modules.tool_invocation.tools.metasploit_tool import MetasploitTool
 
 
 # --- common helpers --------------------------------------------------------
@@ -117,3 +120,82 @@ def test_metasploit_requires_module_and_rhosts():
         MetasploitParamInterpreter().build({"target": "10.0.0.1"})
     with pytest.raises(ParamError):
         MetasploitParamInterpreter().build({"module": "exploit/x"})
+
+
+def test_nmap_has_no_raw_flag_passthrough():
+    """No param may append raw argv: a positional value would become a second
+    (unchecked) target and "--script" would bypass the whitelist."""
+    cmd = NmapParamInterpreter().build(
+        {"target": "10.0.0.1", "extra_flags": ["10.0.0.5", "--script", "smb-psexec"]}
+    )
+    assert cmd == ["nmap", "-oX", "-", "-sV", "-sC", "-T4", "10.0.0.1"]
+
+
+def test_metasploit_extra_options_cannot_override_validated_params():
+    base = {"module": "auxiliary/scanner/ssh/ssh_version", "rhosts": "10.0.0.1"}
+    rc = MetasploitParamInterpreter().build({**base, "extra_options": {"USERNAME": "root"}})
+    assert "set USERNAME root" in rc
+    assert rc.count("set RHOSTS") == 1
+    for key in ("RHOSTS", "rhosts", "RHOST", "LHOST", "LPORT", "PAYLOAD", "RPORT"):
+        with pytest.raises(ParamError):
+            MetasploitParamInterpreter().build({**base, "extra_options": {key: "10.0.0.0/8"}})
+
+
+@pytest.mark.parametrize("params", [
+    {"module": "auxiliary/x\nset RHOSTS 10.0.0.0/8\nrun", "rhosts": "10.0.0.1"},
+    {"module": "auxiliary/x", "rhosts": "10.0.0.1\rset RHOSTS 2"},
+    {"module": "auxiliary/x", "rhosts": "10.0.0.1", "extra_options": {"A": "1\nrun"}},
+    {"module": "auxiliary/x", "rhosts": "10.0.0.1", "extra_options": {"A B": "1"}},
+    {"module": "auxiliary/x", "rhosts": "10.0.0.1", "extra_options": ["RHOSTS=1"]},
+])
+def test_metasploit_rejects_resource_script_injection(params):
+    """The .rc body is an msfconsole script: a newline in any value would
+    inject console commands past the scope check and the approval gate."""
+    with pytest.raises(ParamError):
+        MetasploitParamInterpreter().build(params)
+
+
+def test_metasploit_runs_the_fixed_interpreter(monkeypatch):
+    """msfconsole_path used to let model params choose the executable."""
+    captured = {}
+
+    def fake_run(cmd, timeout=120, cwd=None, env=None):
+        captured["cmd"] = cmd
+        return RawOutput(stdout="", stderr="", returncode=-2, elapsed_seconds=0.0)
+
+    monkeypatch.setattr(SubprocessExecutor, "run", staticmethod(fake_run))
+    MetasploitTool().run(
+        {"module": "auxiliary/x", "rhosts": "10.0.0.1", "msfconsole_path": "/bin/sh"})
+    assert captured["cmd"][:3] == ["msfconsole", "-q", "-r"]
+
+
+def test_preview_builds_the_command_without_running_it(monkeypatch):
+    """ToolInvoker.preview is what the approval gate judges; it must never
+    execute anything and must equal the command the tool would run."""
+    from modules.tool_invocation.invoker import ToolInvoker
+
+    def never_run(*args, **kwargs):
+        raise AssertionError("preview must not execute a subprocess")
+
+    monkeypatch.setattr(SubprocessExecutor, "run", staticmethod(never_run))
+    invoker = ToolInvoker()
+    cases = {
+        "nmap": {"target": "10.0.0.1", "scripts": "http-title"},
+        "dirsearch": {"url": "http://10.0.0.1:5000"},
+        "sqlmap": {"url": "http://10.0.0.1/x?id=1", "os_shell": True},
+    }
+    for tool, params in cases.items():
+        action = ActionDecision(tool=tool, params=params)
+        assert invoker.preview(action) == " ".join(
+            invoker._tools[tool].build_command(params))
+    # nikto's build_command() reserves a temp output file; preview stays side-effect free
+    assert "nikto -h 10.0.0.1" in invoker.preview(
+        ActionDecision(tool="nikto", params={"target": "http://10.0.0.1:5000"}))
+    assert "--os-shell" in invoker.preview(ActionDecision(tool="sqlmap", params=cases["sqlmap"]))
+    # metasploit's preview is the resource script msfconsole would execute
+    assert invoker.preview(ActionDecision(
+        tool="metasploit", params={"module": "exploit/x", "rhosts": "10.0.0.1"})).startswith(
+        "use exploit/x\n")
+    # rejected params never reach a subprocess, so there is nothing to judge
+    assert invoker.preview(ActionDecision(tool="nmap", params={})) is None
+    assert invoker.preview(ActionDecision(tool="nope", params={})) is None

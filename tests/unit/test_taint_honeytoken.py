@@ -176,3 +176,27 @@ def test_honeytoken_visit_audited_and_response_tainted():
     # 第二轮使用凭据 → 被拦截，invoker 只真正执行了 1 次
     assert len(inv.calls) == 1
     assert any("TAINTED_ACTION_BLOCKED" in t.observation for t in state.llm_turns)
+
+
+# ── 存档保存守卫之前的原样输出 ─────────────────────────────────
+
+def test_the_archive_keeps_the_raw_output_from_before_the_guard(tmp_path):
+    """存档要的是工具的原样输出。旧版在守卫替换之后才存：守卫的占位符于是被当成
+    「工具输出」留了下来，还混进了领域适配数据。"""
+    from agent.session_log import EventLog
+
+    guard = make_guard(RecordingAudit())
+    llm = ScriptedLLM([
+        '<thought>scan</thought><action>{"type":"tool","tool":"nikto","params":{"target":"http://192.168.1.100:5000/"}}</action>',
+        '<thought>done</thought><action>{"type":"finish"}</action>',
+    ])
+    raw = ATTACK + "\n- Target IP: 192.168.1.100"
+    inv = FixedInvoker(parsed={"findings": [{"description": ATTACK}]}, raw=raw)
+    loop = _make_loop(llm, inv, guard)
+    log = EventLog(tmp_path).open()
+    state = loop.run(_state(), event_log=log)
+
+    archived = next((tmp_path / "tool_outputs").glob("*.txt")).read_text(encoding="utf-8")
+    assert ATTACK in archived and "[QUARANTINED" not in archived
+    # 模型看到的观察里仍然是占位符；两份内容各归各的
+    assert any("[QUARANTINED" in t.observation for t in state.llm_turns)

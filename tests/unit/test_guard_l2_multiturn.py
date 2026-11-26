@@ -76,6 +76,10 @@ def test_multi_turn_split_payload_quarantined():
 def test_l2_cascade_loads_or_falls_back():
     """use_l2=True：有 torch+产物 → 级联启用；缺任一 → 回退 L1（不返 None）。"""
     pytest.importorskip("joblib")
+    if not (ROOT / "blueteam" / "models" / "model.joblib").exists():
+        # 没有训练产物时 create() 按设计降级为 None，这里区分不出"回退失败"，
+        # 所以先训练（cd blueteam && python3 -m src.train）再跑
+        pytest.skip("model bundle unavailable — run blueteam training first")
     guard = ContextGuard.create(blueteam_root=ROOT / "blueteam")  # L1 基线
     assert guard is not None
     try:

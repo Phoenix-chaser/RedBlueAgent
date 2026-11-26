@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Unit tests for the tool-output protocol (P1-4, adopted from 业界实践
+"""Unit tests for the tool-output protocol (P1-4, adopted from SPECTRE (lalalala5678/spectre, MIT License)
 AGENTS.md rules): empty-result diagnostics, total disclosure navigation
 lines, full-output archive pointers, and named-level param inference.
 """
@@ -69,7 +69,7 @@ def test_nmap_many_hosts_navigation_line_before_body():
     obs = observation_for(ToolResult(
         tool="nmap", command="nmap", success=True, parsed={"hosts": hosts}))
     assert "共 7 台主机，显示前 5 台" in obs
-    # navigation line precedes the listing (truncation-immune, 业界实践 r22)
+    # navigation line precedes the listing (truncation-immune, SPECTRE r22)
     assert obs.index("共 7 台主机") < obs.index("10.0.0.1")
 
 
@@ -197,3 +197,12 @@ def test_trap_lab_spreads_across_four_vectors():
     for k in keys:
         probe = TRAPS[k][:20]
         assert probe in joined, f"trap {k} not visible in any observation"
+
+
+def test_a_failed_result_without_any_reason_does_not_render_as_error_none():
+    """工具以失败状态结束却没给出原因（退出码不为 0、stderr 为空）：模型以前看到的是
+    "ERROR: None"。"""
+    obs = observation_for(ToolResult(tool="sqlmap", command="sqlmap", success=False, parsed={}))
+
+    assert "ERROR: None" not in obs
+    assert "ERROR: 工具以失败状态结束，没有给出原因。" in obs and "下一步（可执行）" in obs

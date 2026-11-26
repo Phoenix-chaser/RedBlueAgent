@@ -5,6 +5,7 @@ llm:
   model: ""                   # Leave blank to use provider default
   max_tokens: 8192
   temperature: 0.1
+  # max_retries: 8           # 429/5xx 的重试次数（env LLM_MAX_RETRIES 优先）；不写则用内核默认的 3 次
   # Token estimate that triggers history compression (HierarchicalSummarizer)
   context_window_budget: 130000
   keep_recent_turns: 20
@@ -24,19 +25,16 @@ agent:
 
 security:
   require_approval_for_exploits: true
-  # 污点策略（CaMeL 最小版）：动作参数命中被隔离载荷/蜜标内容的签名时
-  # block=拦截并回喂可执行指引 | warn=放行仅审计
-  taint_policy: block
-  # 蜜标（AgentShield）：合法测试永不需要访问的路径片段；访问即审计，
-  # 响应自动登记为污点（后续使用该内容将被 taint_policy 处置）
-  honeytokens: []
-  # 示例: honeytokens: ["honeytoken-", "/.git/config.backup"]
+  # 污点策略与蜜标默认取自 guardrails.yaml。按次运行的配置（如 config.live.yaml）
+  # 可以在这里显式写出同名键，写出则优先于 guardrails.yaml：
+  #   taint_policy: block | warn
+  #   honeytokens: ["honeytoken-", "/.git/config.backup"]
   # Dangerous-op approval policy:
   #   "" (default)      interactive prompt on a TTY, reject when headless
   #   interactive       always prompt on stdin
   #   reject            deny dangerous ops headless, no prompting
-  #   auto-approve-scan auto-approve scan-flavored dangerous ops
-  #                     (sqlmap --level>=3, metasploit auxiliary/), deny the rest
+  #   auto-approve-scan auto-approve nmap brute/auth/discovery script scans,
+  #                     deny every other dangerous op
   #   file              park requests under data/approvals/<sid>/pending/ and
   #                     wait for decisions/<id>.json (default deny on timeout)
   # Can be overridden with env SECURITY_APPROVAL_POLICY.

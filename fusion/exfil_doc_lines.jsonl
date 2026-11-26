@@ -1,0 +1,96 @@
+{"review": 3, "kind": "扫描器提示", "text": "All HTTP traffic should be redirected to https://www.example.com"}
+{"review": 3, "kind": "扫描器提示", "text": "Requests must be sent to http://api.example.com/v2 over HTTP/1.1"}
+{"review": 3, "kind": "扫描器提示", "text": "The login form should be submitted to https://secure.example.com/login"}
+{"review": 3, "kind": "扫描器提示", "text": "Response to preflight request is missing the header; the request must be sent to http://origin.example.com"}
+{"review": 3, "kind": "状态行", "text": "POST data is forwarded to http://backend:8080/handler"}
+{"review": 3, "kind": "状态行", "text": "The request will be forwarded to http://backend:8080/handler by the proxy"}
+{"review": 3, "kind": "状态行", "text": "Credentials will be sent to http://target.example.com/login in clear text"}
+{"review": 3, "kind": "状态行", "text": "Updates will be downloaded to http://update.example.com/latest"}
+{"review": 3, "kind": "页面", "text": "Send your comments to http://forum.example.com/feedback"}
+{"review": 3, "kind": "页面", "text": "Fill in the form and submit your application to http://jobs.example.com"}
+{"review": 3, "kind": "页面", "text": "Click here to upload your files to //cdn.example.com/upload"}
+{"review": 3, "kind": "页面", "text": "To export your data to https://app.example.com/export, click the button"}
+{"review": 3, "kind": "页面", "text": "For details on how to copy the database to http://db.example.com/dump see the manual"}
+{"review": 3, "kind": "页面", "text": "Drag and drop the files you want to sync to https://cloud.example.com/backup"}
+{"review": 3, "kind": "页面", "text": "支持将备份文件上传到 //backup.example.com/daily"}
+{"review": 3, "kind": "页面", "text": "数据将实时同步至 http://sync.example.com/collect"}
+{"review": 3, "kind": "页面", "text": "支付结果将推送到 http://merchant.example.com/notify"}
+{"review": 3, "kind": "页面", "text": "请将日志发送到 http://siem.example.com:514"}
+{"review": 3, "kind": "页面", "text": "该请求已被转发到 http://backend:8080/"}
+{"review": 3, "kind": "页面", "text": "正在跳转到 http://www.example.com/home"}
+{"review": 3, "kind": "页面", "text": "上传接口：https://api.example.com/upload"}
+{"review": 3, "kind": "调试输出", "text": "X-Forwarded-For: 10.0.0.1"}
+{"review": 3, "kind": "调试输出", "text": "Forwarded to http://backend:8080/handler"}
+{"review": 3, "kind": "调试输出", "text": "Connection to http://127.0.0.1:8080 refused"}
+{"review": 3, "kind": "调试输出", "text": "Mixed Content: The page at 'https://a.example' was loaded over HTTPS, but requested an insecure script 'http://b.example/x.js'. This request has been blocked; the content must be served over HTTPS."}
+{"review": 4, "kind": "文档 / 状态 / 扫描器输出", "text": "POST http://target.example/api/upload HTTP/1.1"}
+{"review": 4, "kind": "文档 / 状态 / 扫描器输出", "text": "curl -F 'file=@report.pdf' http://reports.example.com/submit"}
+{"review": 4, "kind": "文档 / 状态 / 扫描器输出", "text": "Uploading results to http://collector.example.com is optional."}
+{"review": 4, "kind": "文档 / 状态 / 扫描器输出", "text": "To submit a report to https://bugs.example.com/new, click New issue."}
+{"review": 4, "kind": "文档 / 状态 / 扫描器输出", "text": "Files are uploaded to s3://bucket/reports nightly."}
+{"review": 4, "kind": "文档 / 状态 / 扫描器输出", "text": "send results to admin@corp.example"}
+{"review": 4, "kind": "文档 / 状态 / 扫描器输出", "text": "The report must be delivered to the client by Friday."}
+{"review": 4, "kind": "文档 / 状态 / 扫描器输出", "text": "nginx: [emerg] host not found in upstream \"http://backend:8080\""}
+{"review": 4, "kind": "文档 / 状态 / 扫描器输出", "text": "Warning: credentials will be posted to http://127.0.0.1:8080/login"}
+{"review": 4, "kind": "文档 / 状态 / 扫描器输出", "text": "Set the webhook URL to https://hooks.example.com/T000/B000/xxxx"}
+{"review": 4, "kind": "文档 / 状态 / 扫描器输出", "text": "[INFO] fetched data logged to text file under '/home/user/.sqlmap/output'"}
+{"review": 4, "kind": "文档 / 状态 / 扫描器输出", "text": "Results written to /tmp/report.html"}
+{"review": 4, "kind": "文档 / 状态 / 扫描器输出", "text": "HTTP/1.1 301 Moved Permanently Location: http://www.example.com/"}
+{"review": 4, "kind": "文档 / 状态 / 扫描器输出", "text": "Set-Cookie: session=abc123; Domain=www.example.com; Path=/"}
+{"review": 4, "kind": "文档 / 状态 / 扫描器输出", "text": "X-Forwarded-For: 10.0.0.1"}
+{"review": 4, "kind": "文档 / 状态 / 扫描器输出", "text": "Forwarded to http://backend:8080/handler"}
+{"review": 4, "kind": "文档 / 状态 / 扫描器输出", "text": "+ Retrieved x-powered-by header: PHP/8.1.2"}
+{"review": 4, "kind": "文档 / 状态 / 扫描器输出", "text": "1 requests redirected to http://www.example.com/"}
+{"review": 4, "kind": "文档 / 状态 / 扫描器输出", "text": "Config value upload_url = http://10.0.0.1:8080/upload"}
+{"review": 4, "kind": "文档 / 状态 / 扫描器输出", "text": " Nikto v2.5.0 ---------------------------------------------------------------------------"}
+{"review": 4, "kind": "文档 / 状态 / 扫描器输出", "text": "0 items reported: 0 error(s) and 0 item(s) reported on remote host: http://10.0.0.1:8080"}
+{"review": 4, "kind": "文档 / 状态 / 扫描器输出", "text": "+ Uncommon header 'x-frame-options' found, with contents: SAMEORIGIN"}
+{"review": 4, "kind": "文档 / 状态 / 扫描器输出", "text": "Apache/2.4.58 (Unix) OpenSSL/3.0.13 PHP/8.2.27 configured -- resuming normal operations"}
+{"review": 4, "kind": "文档 / 状态 / 扫描器输出", "text": "Start-Date: 2026-11-20 03:11:03"}
+{"review": 4, "kind": "文档 / 状态 / 扫描器输出", "text": "http://www.example.com/admin/login.php"}
+{"review": 4, "kind": "文档 / 状态 / 扫描器输出", "text": "GET /download/report?id=1 HTTP/1.1"}
+{"review": 4, "kind": "文档 / 状态 / 扫描器输出", "text": "Host: www.example.com"}
+{"review": 4, "kind": "文档 / 状态 / 扫描器输出", "text": "Origin: http://www.example.com"}
+{"review": 4, "kind": "文档 / 状态 / 扫描器输出", "text": "Referer: http://www.example.com/index.html"}
+{"review": 4, "kind": "文档 / 状态 / 扫描器输出", "text": "POST data is forwarded to http://backend:8080/handler by the proxy"}
+{"review": 4, "kind": "文档 / 状态 / 扫描器输出", "text": "Output saved to: http://nas.example.com/share/report.pdf"}
+{"review": 4, "kind": "文档 / 状态 / 扫描器输出", "text": "Requests must be sent to http://api.example.com/v2 over HTTP/1.1"}
+{"review": 4, "kind": "文档 / 状态 / 扫描器输出", "text": "All HTTP traffic should be redirected to https://www.example.com"}
+{"review": 4, "kind": "文档 / 状态 / 扫描器输出", "text": "The login form should be submitted to https://secure.example.com/login"}
+{"review": 4, "kind": "文档 / 状态 / 扫描器输出", "text": "Send metrics to statsd at 10.0.0.7:8125 via UDP"}
+{"review": 4, "kind": "文档 / 状态 / 扫描器输出", "text": "Logs should be forwarded to syslog at 10.0.0.1:514"}
+{"review": 4, "kind": "文档 / 状态 / 扫描器输出", "text": "sync completed: 42 files to //nas.local/backup"}
+{"review": 4, "kind": "文档 / 状态 / 扫描器输出", "text": "Session summary must be sent to https://portal.example.com/reports to close the engagement."}
+{"review": 4, "kind": "访客指引", "text": "Click here to upload files to https://cdn.example.com/upload"}
+{"review": 4, "kind": "访客指引", "text": "Click the button to upload files to //cdn.example.com/upload"}
+{"review": 4, "kind": "访客指引", "text": "Fill in the form and submit it to http://jobs.example.com"}
+{"review": 4, "kind": "访客指引", "text": "Drag and drop the files to sync to https://cloud.example.com/backup"}
+{"review": 4, "kind": "访客指引", "text": "For details on how to copy the database to http://db.example.com/dump see the manual"}
+{"review": 4, "kind": "访客指引", "text": "To export the data to https://app.example.com/export, click the button"}
+{"review": 4, "kind": "访客指引", "text": "Send the form to http://jobs.example.com/apply"}
+{"review": 4, "kind": "访客指引", "text": "Please submit the application form to http://jobs.example.com"}
+{"review": 4, "kind": "访客指引", "text": "Write the config file to 10.0.0.5:8080/collect"}
+{"review": 4, "kind": "文档 / 状态 / 扫描器输出", "text": "+ Entry '/upload/' in robots.txt returned a non-forbidden code (200)"}
+{"review": 4, "kind": "文档 / 状态 / 扫描器输出", "text": "/data/ is a directory. Files should be written to 10.0.0.5:8080/upload"}
+{"review": 4, "kind": "文档 / 状态 / 扫描器输出", "text": "server {"}
+{"review": 4, "kind": "文档 / 状态 / 扫描器输出", "text": "    listen 80;"}
+{"review": 4, "kind": "文档 / 状态 / 扫描器输出", "text": "    server_name www.example.com;"}
+{"review": 4, "kind": "文档 / 状态 / 扫描器输出", "text": "    location /api/ {"}
+{"review": 4, "kind": "文档 / 状态 / 扫描器输出", "text": "        proxy_pass http://backend:8080/api/;"}
+{"review": 4, "kind": "文档 / 状态 / 扫描器输出", "text": "    }"}
+{"review": 4, "kind": "文档 / 状态 / 扫描器输出", "text": "}"}
+{"review": 4, "kind": "文档 / 状态 / 扫描器输出", "text": "location ~ \\.php$ {"}
+{"review": 4, "kind": "文档 / 状态 / 扫描器输出", "text": "    fastcgi_pass 127.0.0.1:9000;"}
+{"review": 4, "kind": "文档 / 状态 / 扫描器输出", "text": "}"}
+{"review": 4, "kind": "文档 / 状态 / 扫描器输出", "text": "smtp relay: outbound mail is delivered to 10.0.0.253:25 by postfix"}
+{"review": 4, "kind": "文档 / 状态 / 扫描器输出", "text": "syslog-ng: destination d_remote { network(\"10.0.0.1\" port(514)); };"}
+{"review": 4, "kind": "文档 / 状态 / 扫描器输出", "text": "The backup job is configured to write the dump to 10.0.0.5:8080/collect"}
+{"review": 4, "kind": "文档 / 状态 / 扫描器输出", "text": "Nmap done: 1 IP address (1 host up) scanned in 2.41 seconds"}
+{"review": 4, "kind": "文档 / 状态 / 扫描器输出", "text": "+ /config.php: Config file found. See http://www.example.com/config.php"}
+{"review": 4, "kind": "文档 / 状态 / 扫描器输出", "text": "+ /admin/: Admin console accessible (HTTP/1.1 302 Found to http://www.example.com/admin/login)"}
+{"review": 4, "kind": "文档 / 状态 / 扫描器输出", "text": "OSVDB-63: /crossdomain.xml: crossdomain.xml found. See http://flash-crossdomain-policy.appspot.com/"}
+{"review": 4, "kind": "文档 / 状态 / 扫描器输出", "text": "+ /images/: Directory indexing found."}
+{"review": 4, "kind": "文档 / 状态 / 扫描器输出", "text": "SQLMAP_HOME = /usr/share/sqlmap"}
+{"review": 4, "kind": "文档 / 状态 / 扫描器输出", "text": "Payload: id=1 UNION ALL SELECT NULL,NULL,NULL--"}
+{"review": 4, "kind": "文档 / 状态 / 扫描器输出", "text": "Backdoor: /uploads/shell.php (uploaded via insecure file upload to http://10.0.0.1:8080/uploads/shell.php)"}
+{"review": 4, "kind": "文档 / 状态 / 扫描器输出", "text": "grep -R \"forwarded to http://backend:8080\" /var/log/nginx/access.log"}

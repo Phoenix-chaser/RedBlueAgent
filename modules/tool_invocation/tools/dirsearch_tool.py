@@ -6,13 +6,14 @@ parsers/dirsearch_parser.py.
 from __future__ import annotations
 
 import os
+import re
 import tempfile
 from datetime import datetime
 
 from modules.tool_invocation.params.dirsearch_params import DirsearchParamInterpreter
 from modules.tool_invocation.params.common import ParamError
 from modules.tool_invocation.parsers.dirsearch_parser import DirsearchParser
-from modules.tool_invocation.tools.base_tool import BaseTool
+from modules.tool_invocation.tools.base_tool import EXIT_GUIDANCE, PARSE_GUIDANCE, BaseTool, error_lines
 from modules.tool_invocation.executor import SubprocessExecutor
 from modules.context_management.state_schema import ToolResult
 from utils.clip import clip_marked
@@ -38,6 +39,10 @@ class DirsearchTool(BaseTool):
     timeout = 300
     parser = DirsearchParser()
     params_interpreter = DirsearchParamInterpreter()
+
+    # dirsearch prints this and still exits 0 when nothing answers on the target
+    # port (seen in the agent image against a closed port)
+    _UNREACHABLE = re.compile(r"^Cannot connect to:[^\n]*", re.M)
 
     def build_command(self, params: dict) -> list[str]:
         # Not used directly — run() handles the temp report lifecycle.
@@ -80,17 +85,31 @@ class DirsearchTool(BaseTool):
         if raw.timed_out:
             error_msg = f"Dirsearch timed out after {self.timeout}s"
         elif raw.returncode == -2:
-            error_msg = raw.stderr
-        elif raw.returncode not in (0, 1) and not report:
-            error_msg = raw.stderr[:500] if raw.stderr else None
+            # 执行器自己写的「未安装」
+            error_msg = ("Tool 'dirsearch' 不可用（未安装或不在 PATH）。"
+                         "下一步（可执行）：改用其他已安装工具完成该步骤。")
+        elif raw.returncode not in (0, 1) and raw.stderr.strip():
+            # stderr 原文进不可信区块，ERROR 行只留 harness 自己写的话
+            parsed["tool_error"] = error_lines(raw.stderr)
+            error_msg = f"dirsearch 以退出码 {raw.returncode} 结束，错误输出见下。" + EXIT_GUIDANCE
 
         # report 文件是纯 JSON（主解析路径）；CLI stdout 混有进度行，仅作
         # 文本 fallback 与 LLM 可见输出
         try:
-            parsed = self.parser.parse(report or raw.stdout, raw.stderr)
+            parsed.update(self.parser.parse(report or raw.stdout, raw.stderr))
         except Exception as e:
             if error_msg is None:
-                error_msg = f"Parser error: {e}"
+                error_msg = PARSE_GUIDANCE
+            parsed["tool_error"] = [f"Parser error: {e}"[:300]]
+
+        unreachable = (self._UNREACHABLE.search(raw.stdout)
+                       if not parsed.get("paths") else None)
+        if unreachable and error_msg is None:
+            # 端口没人应答：不是「0 条路径」，这次根本没扫成
+            success = False
+            parsed["tool_error"] = [unreachable.group(0).strip()[:300]]
+            error_msg = ("dirsearch 连不上目标。下一步（可执行）：用 nmap scan_type='service' "
+                         "确认端口开放且为 HTTP(S)，或换用其他已发现的端口。")
 
         return ToolResult(
             tool=self.name,

@@ -18,11 +18,11 @@ class NiktoParamInterpreter:
       plugins            nikto plugin string or list
       timeout_per_req    seconds per request (default 10)
 
-    Returns (argv, json_output_path) — the caller runs argv then reads the
-    JSON file back, since nikto can't stream JSON to stdout.
+    Returns argv. With json_out_path the report goes to that file in JSON
+    (nikto can't stream JSON to stdout); without it, plain text on stdout.
     """
 
-    def build(self, params: dict, json_out_path: str) -> list[str]:
+    def build(self, params: dict, json_out_path: str | None = None) -> list[str]:
         target, url_port, url_ssl = self._target(params)
 
         cmd = ["nikto", "-h", target, "-nointeractive"]
@@ -38,7 +38,11 @@ class NiktoParamInterpreter:
             cmd += ["-Plugins", plugins]
 
         cmd += ["-timeout", str(as_int(params.get("timeout_per_req", 10), name="timeout_per_req", lo=1, hi=120))]
-        cmd += ["-Format", "json", "-o", json_out_path]
+        if json_out_path is not None:
+            # Ubuntu/Debian 打包的 nikto 2.1.5 没有 json 格式：会打印
+            # "+ ERROR: Invalid output format" 却仍以 0 退出。NiktoTool.run
+            # 认出这一行后退回文本模式。
+            cmd += ["-Format", "json", "-o", json_out_path]
         return cmd
 
     @staticmethod

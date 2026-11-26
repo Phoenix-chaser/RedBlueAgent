@@ -39,6 +39,9 @@ include = ["agent*", "modules*", "security*", "utils*", "fusion*", "scripts*", "
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "docker: runs real tools inside the agent image against the built-in range",
+]
 
 [tool.ruff]
 line-length = 100
