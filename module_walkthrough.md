@@ -135,25 +135,35 @@ LLM 回答类似：
 <action>{"type":"tool","tool":"nmap","params":{"scan_type":"host_discovery"}}</action>
 ```
 
-`_parse_llm_response()` 用正则提取：
+模块级的 `parse_llm_response()`（`ReActLoop._parse_llm_response` 只是转调它，
+演习的 Mock / 真实模型驱动用的是同一个函数，判定的是主循环真正会执行的动作）分三步：
 
 ```python
-# react_loop.py 第 218-253 行
-def _parse_llm_response(self, content):
-    # 提取 <thought>
-    thought_match = re.search(r"<thought>(.*?)</thought>", content, re.DOTALL)
-    
-    # 提取 <action> 中的 JSON
-    action_match = re.search(r"<action>(.*?)</action>", content, re.DOTALL)
-    action_dict = json.loads(action_match.group(1))
-    
-    # 容错：LLM 把工具名放在 type 字段
-    if action_type not in {"tool", "finish", "wait"}:
-        action_dict.setdefault("tool", action_type)
-        action_type = "tool"
-    
-    return thought, ActionDecision(type=action_type, tool=..., params=...)
+# react_loop.py
+def _find_action_json(text):          # ① 找动作对象
+    # 先看 <action>…</action> 里面；按括号配平取 JSON，字符串里的 } 不会截断对象
+    # 找不到就退而求其次：取全文最后一个带 "type" 键的 JSON 对象
+
+def parse_llm_response(content):
+    thought = <thought>…</thought> 里的内容
+    action_dict, problem = _find_action_json(content)
+    # ② 工具名写在 type 字段、parallel 的 actions 写在顶层，都归一化
+    # ③ params 不是对象 → 当作解析失败
+    return thought, ActionDecision(...)
+
+def format_error(content):
+    # ④ 解析不出动作时，告诉模型错在哪、该发什么
+    return "FORMAT_ERROR: …问题：{problem}…下一步（可执行）：按下面的格式重发…"
 ```
+
+**为什么要容错**：glm-5.4 的一次 12 轮容器实测（13 次调用）里，4 条回复不合规范——整条没有标签、
+用圆括号 `(action)` 代替尖括号、多出一个孤立的 `</action>`、纯文字没有动作。旧解析器
+把它们都当成「本轮无动作」，回给模型的只有一句 "No tool action taken this iteration."，
+模型不知道自己格式错了，同一个动作连错三次，阶段被强制推进。
+
+现在前三类直接解析出模型想做的动作；第四类（确实没有动作）回喂 `FORMAT_ERROR`，
+写明问题与正确格式——另一次实测里，模型收到提示后的下一条回复就纠正了。显式的
+`{"type":"wait"}` 不算错误，沿用旧提示。
 
 ### Act：安全检查 + 执行工具
 
@@ -294,8 +304,13 @@ class ToolInvoker:
             "dirsearch": DirsearchTool(),
             "sqlmap": SqlmapTool(),
             "metasploit": MetasploitTool(),
+            "read_url": ReadUrlTool(),
         }
     
+    def preview(self, action):
+        # 只构造、不执行：审批门判定的是这条命令行，而不是 LLM 给的原始参数
+        return self.tools.get(action.tool).preview(action.params)
+
     def invoke(self, action):
         tool = self.tools.get(action.tool)
         return tool.run(action.params)
@@ -317,6 +332,38 @@ class BaseTool:
     
     def build_command(self, params) -> list[str]:
         raise NotImplementedError
+
+    def preview(self, params) -> str:
+        return " ".join(self.build_command(params))   # 不产生任何副作用
+```
+
+一次失败的运行必须带着原因回到模型手里：退出码不为 0 且 stderr 非空时，stderr 按行进入
+`parsed["tool_error"]`（渲染在不可信区块里），`error_message` 是 harness 写的原因和下一步。退出码 1 不算报错（留给「有发现」类工具）但也算不上成功——实测 nmap 以非 root
+做 UDP 扫描正是这种形态：退出码 1、stderr 写着 "requires root privileges"。
+
+失败结果的 `ERROR` 行渲染在不可信标记之外、模型被告知可以信任，所以里面只放 harness
+自己写的原因和下一步。工具带回来的 stderr 和异常消息（可能被目标影响过）按行放进
+`parsed["tool_error"]`，渲染在不可信标记之内，由守卫逐行检查——一行被注入，只换掉那一行。
+运行时注册的外部工具如果仍把原文写进 `error_message`，要标 `ToolResult.error_has_raw_text`，
+守卫会把那条信息整条送检（harness 写的前缀会稀释分数）。harness 自己写的那些提示在检测器
+眼里就是「指令」（实测有 4 条过线），所以它们只过不看检测分的规则。
+失败的结果不再附带「nikto 未发现问题，这是有效结论」这类诊断（没扫成不是结论）；
+一条失败结果完全没给原因时，`ERROR` 行写「工具以失败状态结束，没有给出原因」和下一步，
+不会渲染成 `ERROR: None`；异常消息和 stderr 一样按行拆开再进不可信区块。
+
+### tools/read_url_tool.py — 读取 scope 内的 HTTP 文本
+
+其他工具汇报的是扫描器的结论；`read_url` 是目标自己写的内容（robots.txt、页面、
+文件）进入模型上下文的通道，蜜标防线因此才真正生效。它的边界：
+
+- `url` 和其他目标参数一样过 scope 校验，只取 http/https（`file://` 之类直接拒绝）；
+- 重定向只报告不跟随——跳转是离开授权范围的常见方式，新地址要自己再过一次 scope 校验；
+- 正文有字节和行数上限，HTML 去掉脚本、样式和标签后按块级元素逐行返回，守卫可以单独隔离被注入的那一行；
+- 非文本内容只报告大小，不进上下文。
+
+```python
+obs = invoker.invoke(ActionDecision(tool="read_url", params={"url": "http://10.0.0.1:5000/robots.txt"}))
+obs.parsed["lines"][:2]   # ['User-agent: *', 'Disallow: /admin']
 ```
 
 ### tools/nmap_tool.py — Nmap 命令构建
@@ -342,6 +389,34 @@ def build_command(self, params):
     cmd.append(target)
     return cmd
 ```
+
+（参数到命令的映射在 `params/nmap_params.py` 的 `NmapParamInterpreter` 里。）`NmapTool.run()`
+另外翻译一种重试也不会好的失败：agent 镜像以非 root 运行，UDP 扫描（`-sU`）和 OS 检测
+（`-O`）永远做不了，错误信息直接告诉模型改用 TCP 扫描。
+
+### tools/nikto_tool.py — 两种 nikto 都要能用
+
+nikto 不能把 JSON 写到 stdout，所以先写临时文件再读回。但 Ubuntu/Debian 打包的 nikto 是
+2.1.5，没有 JSON 输出：它打印 `+ ERROR: Invalid output format` 之后**仍然以 0 退出**。
+旧封装只看退出码，于是「成功、0 条发现」被当成有效结论交给模型——agent 镜像里的 nikto
+其实从未工作过。
+
+```python
+def run(self, params):
+    result = self._execute(params)             # ① 先按 JSON 模式跑
+    error = _nikto_error(result)
+    if error and "invalid output format" in error.lower():
+        self._text_mode = True
+        result = self._execute(params)         # ② 同一次扫描，改用纯文本输出
+        error = _nikto_error(result)
+    if error and not result.parsed["findings"]:
+        result.success = False                 # ③ nikto 自己报错且没有结果 → 失败
+        result.error_message = "nikto 报错且没有产出任何结果：…下一步（可执行）：…"
+    return result
+```
+
+文本模式走解析器的纯文本分支（`+ OSVDB-xxxx: /path: description`）。收尾统计行和否定性
+结果行（"No CGI Directories found"）不算发现。
 
 ### executor.py — 子进程执行器
 
@@ -590,7 +665,7 @@ react_loop.py 开始循环（最多 200 轮）
 │ THINK                                                   │
 │   _build_messages() 拼接 6 部分 Prompt                   │
 │   调用 LLM API                                          │
-│   _parse_llm_response() 提取 thought + action           │
+│   parse_llm_response() 提取 thought + action（标签容错）   │
 ├─────────────────────────────────────────────────────────┤
 │ ACT                                                     │
 │   security/boundary.py 安全检查                          │
@@ -619,7 +694,8 @@ generator.py 生成双语报告 → report.md + report.json
 |------|------|--------------|
 | `agent/core.py` | 总指挥，组装模块 | 第一步 |
 | `agent/llm_factory.py` | 创建 LLM 客户端 | 第二步 |
-| `agent/react_loop.py` | ReAct 循环引擎 | 第三步 |
+| `agent/react_loop.py` | ReAct 循环引擎（含回复解析 `parse_llm_response`） | 第三步 |
+| `agent/session_log.py` | WAL 事件日志、快照、实例锁、恢复 | 第一步 |
 | `agent/prompts/system_prompt.py` | 系统提示词 | 第四步 |
 | `agent/prompts/stage_prompts.py` | 阶段指导 | 第五步 |
 | `security/boundary.py` | 安全边界控制器 | 第六步 |
@@ -628,7 +704,9 @@ generator.py 生成双语报告 → report.md + report.json
 | `security/audit_logger.py` | 审计日志 | 第六步 |
 | `modules/tool_invocation/invoker.py` | 工具路由 | 第七步 |
 | `modules/tool_invocation/tools/base_tool.py` | 工具统一接口 | 第七步 |
-| `modules/tool_invocation/tools/nmap_tool.py` | Nmap 命令构建 | 第七步 |
+| `modules/tool_invocation/tools/nmap_tool.py` | Nmap：参数解释器接线 + 需要 root 时的提示 | 第七步 |
+| `modules/tool_invocation/tools/nikto_tool.py` | nikto：JSON 失败退回文本模式，报错不算成功 | 第七步 |
+| `modules/tool_invocation/tools/read_url_tool.py` | 读取 scope 内的 HTTP 文本 | 第七步 |
 | `modules/tool_invocation/executor.py` | 子进程执行 | 第七步 |
 | `modules/context_management/context_manager.py` | 状态合并+自动推理 | 第八步 |
 | `modules/context_management/state_schema.py` | 全局状态+去重 | 第八步 |
