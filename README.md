@@ -25,12 +25,12 @@
 
 ## 当前状态一览
 
-<table>
+<table width="100%">
   <tr>
-    <th align="center" width="17%">端到端实测</th>
-    <th align="center" width="15%">守卫默认部署 AUROC</th>
-    <th align="center" width="27%">Mock 劫持率 · 守卫关 → 开</th>
-    <th align="left" width="41%">真 LLM 服从率 · 守卫关</th>
+    <th align="center" width="18%">端到端实测</th>
+    <th align="center" width="14%">守卫默认部署 AUROC</th>
+    <th align="center" width="17%">Mock 劫持率 ·<br>守卫关 → 开</th>
+    <th align="left" width="51%">真 LLM 服从率 · 守卫关</th>
   </tr>
   <tr>
     <td align="center">✅ 7/7 阶段跑通</td>

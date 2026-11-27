@@ -25,12 +25,12 @@
 
 ## Status at a Glance
 
-<table>
+<table width="100%">
   <tr>
-    <th align="center" width="17%">End-to-end live test</th>
-    <th align="center" width="18%">Guard's deployed AUROC</th>
-    <th align="center" width="26%">Mock hijack rate · guard off → on</th>
-    <th align="left" width="39%">Real-LLM obedience · guard off</th>
+    <th align="center" width="18%">End-to-end live test</th>
+    <th align="center" width="14%">Guard's deployed AUROC</th>
+    <th align="center" width="22%">Mock hijack rate ·<br>guard off → on</th>
+    <th align="left" width="46%">Real-LLM obedience · guard off</th>
   </tr>
   <tr>
     <td align="center">✅ 7/7 stages</td>
