@@ -1,0 +1,49 @@
+{
+ "note": "实测日志的目录不入库；这里存的是图里用到的原样日志行（每份取末尾两行）",
+ "logs": [
+  {
+   "file": "ci-py314.txt",
+   "label": {
+    "zh": "CI 口径（离线可跑）",
+    "en": "CI scope (runs offline)"
+   },
+   "lines": [
+    ".............                                                            [100%]",
+    "911 passed, 39 skipped in 6.07s"
+   ]
+  },
+  {
+   "file": "with-image-py314.txt",
+   "label": {
+    "zh": "本机构建了 agent 镜像之后",
+    "en": "with the agent image built"
+   },
+   "lines": [
+    "..................                                                       [100%]",
+    "949 passed, 5 skipped in 57.92s"
+   ]
+  },
+  {
+   "file": "docker-check.txt",
+   "label": {
+    "zh": "容器验证",
+    "en": "container check"
+   },
+   "lines": [
+    ".                                                                        [100%]",
+    "1 passed, 160 deselected in 53.41s"
+   ]
+  },
+  {
+   "file": "mutation.txt",
+   "label": {
+    "zh": "变异检查",
+    "en": "mutation check"
+   },
+   "lines": [
+    "变异 123 个：被测试杀死 123 个，没有杀死 0 个（应为 0）",
+    "exit=0"
+   ]
+  }
+ ]
+}

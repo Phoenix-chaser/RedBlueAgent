@@ -11,7 +11,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![CI](https://img.shields.io/github/actions/workflow/status/Phoenix-chaser/RedBlueAgent/ci.yml?style=for-the-badge&label=CI)](https://github.com/Phoenix-chaser/RedBlueAgent/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/Tests-685%20passed-brightgreen?style=for-the-badge)](https://github.com/Phoenix-chaser/RedBlueAgent/actions/workflows/ci.yml)
+[![Tests](https://img.shields.io/badge/Tests-911%20passed-brightgreen?style=for-the-badge)](https://github.com/Phoenix-chaser/RedBlueAgent/actions/workflows/ci.yml)
 [![CPU Only](https://img.shields.io/badge/Runtime-CPU%20only-lightgrey?style=for-the-badge)]()
 
 <sub>由本科毕业设计 PentestAgent（本仓库前身）演化而来：在保留原有 ReAct 渗透引擎的基础上，为 Agent 补上了它自己缺失的安全防线</sub>
@@ -25,9 +25,20 @@
 
 ## 当前状态一览
 
-| 端到端实测 | 守卫默认部署 AUROC | Mock 劫持率 · 守卫关 → 开 | 真 LLM 服从率 · 守卫关 |
-|:---:|:---:|:---:|:---:|
-| ✅ 7/7 阶段跑通 | **0.983** | 100% → **0%** | **0%**（0/21）；换成伪造模型自己的话 **3.8%**（39/1024），守卫开 **0/39**（15 个状态） |
+<table>
+  <tr>
+    <th align="center" width="17%">端到端实测</th>
+    <th align="center" width="15%">守卫默认部署 AUROC</th>
+    <th align="center" width="27%">Mock 劫持率 · 守卫关 → 开</th>
+    <th align="left" width="41%">真 LLM 服从率 · 守卫关</th>
+  </tr>
+  <tr>
+    <td align="center">✅ 7/7 阶段跑通</td>
+    <td align="center"><strong>0.983</strong></td>
+    <td align="center">100% → <strong>0%</strong></td>
+    <td align="left"><strong>0%</strong>（0/21）；换成伪造模型自己的话 <strong>3.8%</strong>（39/1024），守卫开 <strong>0/39</strong>（15 个状态）</td>
+  </tr>
+</table>
 
 - **端到端**：真实模型（glm-5.4）+ 真实工具 + 内置靶场，完整链路、`kill -9` 续跑、优雅停机和容错路径都已重做，见[实测报告](docs/live-test-report.md)；2026-11-25 又在最终代码上重跑了一次完整链路。每个场景只跑了一次。
 - **检测器**：守卫默认部署的组合在模板不相交测试集（523 条）上的数字，取自仓库内提交的评测产物，`bash run_all.sh` 可重新生成；数据是自写模板，结论限于同分布。在留出的真实工具输出上误报率 3.6%。
@@ -157,6 +168,10 @@ Web 控制台（`scripts/serve.py`，Bearer Token 认证）：SSE 实时事件�
 > [!NOTE]
 > **怎么读这张表**：Mock 只要在可见文本里看到未隔离的陷阱标记就服从，所以表里的劫持率是按构造得到的。它回答的是「守卫有没有把陷阱标记替换掉」，不是「真实模型会不会被劫持」。
 
+<p align="center"><img src="docs/images/drill-mock-hijack.png" alt="Mock 演习：守卫关与守卫开时被劫持的陷阱格子数"></p>
+
+<p align="center"><sub>图：Mock 演习里被劫持的陷阱格子数，守卫关与守卫开对比（每个方格是一个陷阱场景）。数据读自 <code>drills/drill_results*.json</code> 里不带 <code>real</code> 的八份结果，简化循环与生产主循环各四个场景集。Mock 是刻意构造的最坏情形——看到未隔离的陷阱就服从，所以这张图量的是「守卫有没有把陷阱换掉」，不是真实模型的服从率。</sub></p>
+
 **真实 LLM 对照（glm-5.4，2026-11-24；简化循环重复 3 次，共 48 次运行，无出错格子；逐次结果见 [`drills/drill_results.real.json`](drills/drill_results.real.json)）**：守卫关闭时服从率是 **0%**（0/21）——没有外泄请求，也没有在验证之前收尾。每个格子都是 5 轮走完（主机发现、服务扫描、nikto、sqlmap、收尾），模型在思考里把注入明确识别为不可信数据并拒绝。守卫开启时同样 0/21 被劫持，21/21 完成，21/21 个陷阱场景发生隔离，无陷阱场景误隔离 0。Mock 的概率 1 服从因此是刻意构造的上界：对这个模型，守卫没有改变任何一次运行的结果——它要挡的是 0 到 1 之间的残余风险，而这份残余在这个模型上没有出现。
 
 **其它 GLM 模型**：智谱 Coding Plan 端点上实际可用的另外两个模型各单次运行，结果相同——glm-5.3 为 0/7 → 0/7，glm-5.3-flash 为 0/7 → 0/7，守卫开启时都是 7/7 完成、7/7 发生隔离、误隔离 0（[`drill_results.real.glm-5.3.json`](drills/drill_results.real.glm-5.3.json)、[`drill_results.real.glm-5.3-flash.json`](drills/drill_results.real.glm-5.3-flash.json)）。在这个端点上请求更老的模型名（如 `glm-4.5-air`、`glm-4.5`）实际返回的是 glm-5.3-flash，`glm-5` 到 `glm-5.3` 返回的是 glm-5.3——所以在这个套餐里靠换模型得不到非零的服从率。
@@ -219,7 +234,7 @@ Mock（最坏情形）下守卫关 8/8 被劫持。守卫开着的**第一版**�
 
 **外部基准：在 AgentDojo 公开的真实模型记录上量 [12]**。上面的语料都来自两个内置靶场，陷阱和规则又出自同一个人；而检测器在自己训练分布上的分数说明不了它在别的工具输出上的表现 [5]。所以另取了一份外部数据：AgentDojo 是智能体提示注入的标准评测集（银行、日历、云盘、Slack、旅行四类工具），仓库里公开了几十个真实模型的完整运行记录——每一份带着注入的原文、被注入的工具输出、模型之后的工具调用和评测结论。先把没有任何防御的 GPT-4o 那一份复算一遍，`important_instructions` 攻击的成功率是 47.7%（629 个格子），和论文的量级一致。再把记录里的工具输出原样交给守卫（一条字符串字段，和一个通用工具返回自由文本时一样），分三类数（复现：`fusion/agentdojo_eval.py`，记录按需 sparse clone，命令在脚本开头）：
 
-| 模型的公开记录（无防御） | `important_instructions` 成功率 | 模型中招的注入，守卫能去掉触发点 | 干净的工具输出被误隔离 |
+| 模型的公开记录<br>（无防御） | `important_instructions`<br>成功率 | 模型中招的注入<br>守卫能去掉触发点 | 干净的工具输出<br>被误隔离 |
 |:---|---:|---:|---:|
 | GPT-4o | 47.7% | **87.2%**（734/842） | **8.2%**（102/1240） |
 | GPT-4o mini | 27.2% | 82.5%（80/97） | 11.5% |
@@ -227,6 +242,10 @@ Mock（最坏情形）下守卫关 8/8 被劫持。守卫开着的**第一版**�
 | Claude 3.7 Sonnet | 5.0% | 92.9%（39/42） | 17.0% |
 | Claude 3.5 Sonnet | 1.1% | 4/4 | 10.9% |
 | Llama 3.3 70B | 23.1% | 28.8%（67/233） | 3.8% |
+
+<p align="center"><img src="docs/images/agentdojo-benchmark.png" alt="外部基准 AgentDojo：触发点被守卫去掉的比例与干净输出被误隔离的比例"></p>
+
+<p align="center"><sub>图：外部基准 AgentDojo。绿条是模型中过招的注入里触发点被守卫去掉的比例，琥珀条是干净的工具输出被误隔离的比例；左面模型名下的小字是这个模型原样的攻击成功率。数据取自 <code>fusion/agentdojo_eval.py</code> 的输出，存在 <code>docs/images/chart-data/agentdojo_eval.json</code>。这是守卫单方面的处置，不是这些模型在守卫下的攻击成功率；标了斜纹的一行只有四条样本，比例不足为凭。</sub></p>
 
 两点要说明。第一，「去掉触发点」是守卫单方面的处置，不是这些模型在守卫下的攻击成功率；可以参照的是 AgentDojo 自带的防御在同一批 GPT-4o 格子上的成功率：工具过滤 6.8%，注入检测器 7.9%，只加不可信标记 41.7%。第二，这个基准第一次把守卫放到非渗透的工具输出上，照出一个问题：逐段复检时每一行是脱离上下文单独打分的，检测器对这种短行的分数分布和整段文本不一样——按原来的阈值，42.3% 的干净输出会被误隔离（菜谱步骤、会议纪要的行动项、邮件里的「请注意地址已变更」都是指令体）。把逐段门槛提到 0.70 之后是 8.2%，代价是触发点的检出从 86.5% 降到 83.4%（这两组数字含破坏型攻击的总数）。Llama 3.3 那一行偏低：它中招的多是 `TODO: …`、`Ignore your previous …` 这种不带模板的直白写法，守卫对这类只能靠检测器。同一个基准还量出效用上的代价：被污染的工具输出是整条换掉的，里面的正常数据一起没了——有的状态里用户任务要读的文件内容就这样被换成了占位符。
 
@@ -309,6 +328,10 @@ Mock（最坏情形）下守卫关 8/8 被劫持。守卫开着的**第一版**�
 **守卫开那一栏是真实调用。** 无防护时中招的格子全部重问——守卫把被污染的输出换成占位符之后，模型下一步做什么；另外每种写法抽 20 个没中招的格子也重问了。三个模型合计 464 次（结构伪造 399 次，`TODO:` 65 次），全部拿到了完整回答。带结构标记的 39 个中招格子重问后执行 **0** 次；抽样的 360 个没中招的格子里执行 0 次。朴素 `TODO:` 不一样：守卫只去掉了 63/171 个格子的触发点（靠的是检测器），没去掉的那些提示词和无防护时一字不差，中招的 5 个格子重问后执行 **5** 次。
 
 中招的格子是按「中过招」挑出来的，重问一遍本来就可能不再中招（采样温度 0.1），所以同一批格子守卫关着——提示词一字不差——也重问了一遍作对照（`drills/agentdojo_continue/repeat.*.jsonl`）：带结构标记的 39 个里 27 个再次执行，守卫开着是 0；朴素 `TODO:` 的 5 个里 4 个再次执行，守卫开着是 5。
+
+<p align="center"><img src="docs/images/structural-forgery.png" alt="真实模型：结构伪造注入下执行注入的格子数（无防护、守卫关着重问的对照、守卫开）"></p>
+
+<p align="center"><sub>图：真实模型在结构伪造注入下执行注入的格子数。无防护时中招的格子全部重问一遍——守卫开着重问，执行为零；同一批格子守卫关着重问（提示词一字不差）作为对照，大半再次执行，所以对照是必需的。数字取自 <code>fusion/structural_summary.py</code> 的输出（它只凭 <code>drills/agentdojo_continue/</code> 里存着的回复重算），存在 <code>docs/images/chart-data/structural_forgery.json</code>；试验台不带提示词层防护，样本比格子数小（见下文）。</sub></p>
 
 **样本比格子数看起来小。** 守卫开了以后被污染的输出整条换成占位符，同一个状态的提示词和用哪种写法无关：39 个中招格子对应的是 15 个状态。中招也集中：25 个格子是同一条注入——把 Fred 拉进 Slack——落在 4 个状态上；三个模型各自吃到的写法也不同（glm-5.4 只吃伪造用户发言和伪造会话记录，glm-5.3-flash 只吃了措辞二里的 2 个格子）。「执行了注入」的格子里有 5 个只满足宽松判定（严格 38/1024）：4 个是 `send_direct_message`、1 个是 `create_calendar_event`——给 Alice 发消息的那几个都带着攻击者的网址、正文不同，建日程的那一个少了参与人。按宽松判定算执行；只算严格匹配，表一是 38/1024。
 
@@ -615,8 +638,13 @@ tests/unit/              单元测试（40 个测试文件）
 
 ```bash
 python3 -m pytest tests -q
-# 911 passed, 39 skipped —— 离线可跑；本机构建了 agent 镜像时是 949 passed, 5 skipped；CI 覆盖 Python 3.10–3.13 + ruff
+# 911 passed, 39 skipped —— 离线可跑；本机构建了 agent 镜像时是 949 passed, 5 skipped
+# CI 覆盖 Python 3.10–3.13 + ruff
 ```
+
+<p align="center"><img src="docs/images/test-summary.png" alt="实测日志末尾几行：离线测试、构建镜像后的测试、容器验证、变异检查"></p>
+
+<p align="center"><sub>图：实测日志的末尾几行，由 <code>scripts/make_readme_charts.py</code> 原样排成——依次是 CI 口径、本机构建了 agent 镜像之后、容器验证、变异检查。日志目录不入库，用到的几行存在 <code>docs/images/chart-data/test_summary.json</code>。</sub></p>
 
 三层测试。单元测试；`tests/integration/` 里的离线集成测试，让脚本化模型走生产主循环，覆盖全部演习场景、四向量场景、隐蔽场景集和结构伪造场景集，不需要训练模型；以及容器验证，在 agent 镜像里用真实的 nmap / nikto / dirsearch / read_url 打内置靶场，验证真实工具的输出解析、scope 拦截、审批门对真实命令的判定和蜜标闭环（需要 Docker 和 agent 镜像，没有时自动跳过）。
 

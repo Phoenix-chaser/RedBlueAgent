@@ -1,0 +1,113 @@
+{
+ "source": "python3 fusion/agentdojo_eval.py <runs/…>（六份没有任何防御的记录）",
+ "models": [
+  {
+   "run": "gpt-4o-2024-05-13",
+   "model": "GPT-4o",
+   "pipeline": "gpt-4o-2024-05-13",
+   "transcripts": 6775,
+   "asr": [
+    300,
+    629
+   ],
+   "e1": [
+    734,
+    842
+   ],
+   "e3": [
+    102,
+    1240
+   ]
+  },
+  {
+   "run": "gpt-4o-mini-2024-07-18",
+   "model": "GPT-4o mini",
+   "pipeline": "gpt-4o-mini-2024-07-18",
+   "transcripts": 629,
+   "asr": [
+    171,
+    629
+   ],
+   "e1": [
+    80,
+    97
+   ],
+   "e3": [
+    39,
+    340
+   ]
+  },
+  {
+   "run": "gemini-2.0-flash-001",
+   "model": "Gemini 2.0 Flash",
+   "pipeline": "gemini-2.0-flash-001",
+   "transcripts": 949,
+   "asr": [
+    134,
+    949
+   ],
+   "e1": [
+    61,
+    78
+   ],
+   "e3": [
+    29,
+    234
+   ]
+  },
+  {
+   "run": "claude-3-7-sonnet-20250219",
+   "model": "Claude 3.7 Sonnet",
+   "pipeline": "claude-3-7-sonnet-20250219",
+   "transcripts": 949,
+   "asr": [
+    47,
+    949
+   ],
+   "e1": [
+    39,
+    42
+   ],
+   "e3": [
+    64,
+    377
+   ]
+  },
+  {
+   "run": "claude-3-5-sonnet-20241022",
+   "model": "Claude 3.5 Sonnet",
+   "pipeline": "claude-3-5-sonnet-20241022",
+   "transcripts": 629,
+   "asr": [
+    7,
+    629
+   ],
+   "e1": [
+    4,
+    4
+   ],
+   "e3": [
+    22,
+    201
+   ]
+  },
+  {
+   "run": "meta-llama_Llama-3.3-70B-Instruct",
+   "model": "Llama 3.3 70B",
+   "pipeline": "local",
+   "transcripts": 2847,
+   "asr": [
+    219,
+    949
+   ],
+   "e1": [
+    67,
+    233
+   ],
+   "e3": [
+    29,
+    766
+   ]
+  }
+ ]
+}
